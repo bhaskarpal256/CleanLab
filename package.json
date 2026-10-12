@@ -1,0 +1,13 @@
+{
+  "name": "resume-builder-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI Resume Customizer & ATS Tailor (Next.js + FastAPI)",
+  "scripts": {
+    "dev": "npm run dev --prefix frontend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "cd backend && ./venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+    "build": "npm run build --prefix frontend",
+    "start": "./start.sh"
+  }
+}
