@@ -72,6 +72,86 @@ export const CustomizationSettings: React.FC<CustomizationSettingsProps> = ({
         <h2 className="text-base font-semibold text-white">Customization Preferences</h2>
       </div>
 
+      {/* Editable Criteria: Target Role & Target Company */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+            Target Role / Title
+          </label>
+          <input
+            type="text"
+            value={options.target_role || ""}
+            onChange={(e) => setOptions((prev) => ({ ...prev, target_role: e.target.value }))}
+            placeholder="e.g. Full-Stack Developer (AI & Mobile)"
+            disabled={isProcessing}
+            className="w-full rounded-xl border border-slate-700 bg-slate-950/80 p-2 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+            Target Company / Hiring Org
+          </label>
+          <input
+            type="text"
+            value={options.target_company || ""}
+            onChange={(e) => setOptions((prev) => ({ ...prev, target_company: e.target.value }))}
+            placeholder="e.g. ThePrepLab / Innovista Labs"
+            disabled={isProcessing}
+            className="w-full rounded-xl border border-slate-700 bg-slate-950/80 p-2 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+        </div>
+      </div>
+
+      {/* Editable Criteria: Seniority Level & Key Skills to Highlight */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+            Target Seniority / Career Level
+          </label>
+          <select
+            value={options.seniority_level || "Mid-Level (2-5 years)"}
+            onChange={(e) => setOptions((prev) => ({ ...prev, seniority_level: e.target.value }))}
+            disabled={isProcessing}
+            className="w-full rounded-xl border border-slate-700 bg-slate-950/80 p-2 text-xs text-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          >
+            <option value="Entry-Level (<2 years)">Entry-Level (&lt;2 years)</option>
+            <option value="Mid-Level (2-5 years)">Mid-Level (2-5 years)</option>
+            <option value="Senior Engineer (5-8 years)">Senior Engineer (5-8 years)</option>
+            <option value="Staff / Lead Architect (8+ years)">Staff / Lead Architect (8+ years)</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+            Key Tech Stack to Prioritize
+          </label>
+          <input
+            type="text"
+            value={options.key_skills_to_emphasize || ""}
+            onChange={(e) => setOptions((prev) => ({ ...prev, key_skills_to_emphasize: e.target.value }))}
+            placeholder="e.g. PostgreSQL, Azure, Next.js, Docker, FastAPI"
+            disabled={isProcessing}
+            className="w-full rounded-xl border border-slate-700 bg-slate-950/80 p-2 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+        </div>
+      </div>
+
+      {/* Editable Criteria: Custom Instructions & Focus Areas */}
+      <div className="mb-4">
+        <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+          Special Focus Areas & Custom Criteria for LLM
+        </label>
+        <textarea
+          rows={2}
+          value={options.custom_instructions || ""}
+          onChange={(e) => setOptions((prev) => ({ ...prev, custom_instructions: e.target.value }))}
+          placeholder="e.g. Emphasize my Azure and PostgreSQL experience; highlight mobile app on Play Store; focus on latency optimization..."
+          disabled={isProcessing}
+          className="w-full rounded-xl border border-slate-700 bg-slate-950/80 p-2.5 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y"
+        />
+      </div>
+
       {/* Tone Selection */}
       <div className="mb-4">
         <label className="text-xs font-medium text-slate-300 mb-1.5 flex items-center gap-1.5">

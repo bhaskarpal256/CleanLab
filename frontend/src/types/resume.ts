@@ -9,15 +9,26 @@ export interface ParsedResumeResponse {
   detected_name?: string;
   detected_email?: string;
   detected_phone?: string;
+  detected_location?: string;
+  detected_linkedin?: string;
+  detected_github?: string;
+  page_count?: number;
+  has_tables?: boolean;
   sections_detected: string[];
 }
 
 export interface CustomizationOptions {
   target_role?: string;
+  target_company?: string;
+  seniority_level?: string;
+  key_skills_to_emphasize?: string;
   tone: "impact_metrics" | "balanced" | "technical" | "executive";
   sections_to_customize: string[];
   generate_cover_letter: boolean;
-  target_company?: string;
+  custom_instructions?: string;
+  candidate_location?: string;
+  candidate_linkedin?: string;
+  candidate_github?: string;
   hf_token?: string;
   hf_model?: string;
 }

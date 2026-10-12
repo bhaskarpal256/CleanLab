@@ -1,10 +1,12 @@
 import os
 import json
 import re
+import base64
 from typing import Dict, Any, Optional
 import httpx
 from ..config import settings
 from .scorer import calculate_match_metrics, evaluate_ats
+from ..parsers.pdf_parser import inspect_pdf_thoroughly
 
 SYSTEM_PROMPT = """You are an elite Senior Tech Recruiter and ATS Optimization Expert.
 Your task is to take a Candidate's Resume and a Target Job Description (JD), and tailor the resume to maximize its interview conversion rate and ATS pass rate.
@@ -81,9 +83,14 @@ You MUST respond strictly with a valid JSON object matching this exact schema:
 }
 """
 
-async def call_gemini_api(prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
-    """Call Google Gemini API using google-generativeai."""
-    api_key = settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "")
+async def call_gemini_api(
+    prompt: str,
+    system_instruction: str,
+    custom_gemini_key: Optional[str] = None,
+    pdf_bytes: Optional[bytes] = None
+) -> Optional[Dict[str, Any]]:
+    """Call Google Gemini API using google-generativeai with multimodal PDF support."""
+    api_key = custom_gemini_key or settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "")
     if not api_key:
         return None
         
@@ -102,7 +109,12 @@ async def call_gemini_api(prompt: str, system_instruction: str) -> Optional[Dict
             }
         )
         
-        response = await model.generate_content_async(prompt)
+        contents = []
+        if pdf_bytes:
+            contents.append({"mime_type": "application/pdf", "data": pdf_bytes})
+        contents.append(prompt)
+
+        response = await model.generate_content_async(contents)
         text = response.text.strip()
         return clean_and_parse_json(text)
     except Exception as e:
@@ -116,10 +128,16 @@ async def call_gemini_api(prompt: str, system_instruction: str) -> Optional[Dict
                 system_instruction=system_instruction,
                 generation_config={"temperature": 0.2, "response_mime_type": "application/json"}
             )
-            response = await fallback_model.generate_content_async(prompt)
+            contents = []
+            if pdf_bytes:
+                contents.append({"mime_type": "application/pdf", "data": pdf_bytes})
+            contents.append(prompt)
+            response = await fallback_model.generate_content_async(contents)
             return clean_and_parse_json(response.text.strip())
         except Exception as inner_e:
             print(f"Fallback Gemini model also failed: {inner_e}")
+    return None
+
 async def call_huggingface_api(
     prompt: str,
     system_instruction: str,
@@ -146,7 +164,7 @@ async def call_huggingface_api(
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.2,
-        "max_tokens": 3000,
+        "max_tokens": 4096,
         "response_format": {"type": "json_object"}
     }
 
@@ -157,7 +175,7 @@ async def call_huggingface_api(
                 data = resp.json()
                 content = data["choices"][0]["message"]["content"]
                 return clean_and_parse_json(content)
-            elif resp.status_code == 400:
+            elif resp.status_code in [400, 422]:
                 # Retry without response_format if model lacks json_object parameter support
                 payload.pop("response_format", None)
                 resp = await client.post(url, headers=headers, json=payload)
@@ -169,25 +187,26 @@ async def call_huggingface_api(
         except Exception as e:
             print(f"Hugging Face API request failed: {e}")
 
-    # Fallback to alternative popular HF model e.g. Qwen/Qwen2.5-72B-Instruct
-    if model != "Qwen/Qwen2.5-72B-Instruct":
-        try:
-            payload["model"] = "Qwen/Qwen2.5-72B-Instruct"
-            payload.pop("response_format", None)
-            async with httpx.AsyncClient(timeout=90.0) as client:
-                resp = await client.post(url, headers=headers, json=payload)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    content = data["choices"][0]["message"]["content"]
-                    return clean_and_parse_json(content)
-        except Exception as e:
-            print(f"Hugging Face fallback model request failed: {e}")
+    # Fallback to alternative popular HF models e.g. Qwen/Qwen2.5-72B-Instruct or Llama-3.1-8B-Instruct
+    for fallback_candidate in ["Qwen/Qwen2.5-72B-Instruct", "meta-llama/Llama-3.1-8B-Instruct"]:
+        if model != fallback_candidate:
+            try:
+                payload["model"] = fallback_candidate
+                payload.pop("response_format", None)
+                async with httpx.AsyncClient(timeout=90.0) as client:
+                    resp = await client.post(url, headers=headers, json=payload)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        content = data["choices"][0]["message"]["content"]
+                        return clean_and_parse_json(content)
+            except Exception as e:
+                print(f"Hugging Face fallback model request failed ({fallback_candidate}): {e}")
 
     return None
 
-async def call_groq_or_openai_api(prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
+async def call_groq_or_openai_api(prompt: str, system_instruction: str, custom_groq_key: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Call Groq or OpenAI compatible API endpoint."""
-    groq_key = settings.GROQ_API_KEY or os.getenv("GROQ_API_KEY", "")
+    groq_key = custom_groq_key or settings.GROQ_API_KEY or os.getenv("GROQ_API_KEY", "")
     openai_key = settings.OPENAI_API_KEY or os.getenv("OPENAI_API_KEY", "")
     
     if groq_key:
@@ -221,20 +240,45 @@ async def call_groq_or_openai_api(prompt: str, system_instruction: str) -> Optio
             data = resp.json()
             content = data["choices"][0]["message"]["content"]
             return clean_and_parse_json(content)
-        else:
-            print(f"OpenAI/Groq API error ({resp.status_code}): {resp.text}")
-            return None
+        elif resp.status_code in [400, 422]:
+            payload.pop("response_format", None)
+            resp = await client.post(url, headers=headers, json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                content = data["choices"][0]["message"]["content"]
+                return clean_and_parse_json(content)
+        print(f"OpenAI/Groq API error ({resp.status_code}): {resp.text}")
+        return None
 
 def clean_and_parse_json(text: str) -> Dict[str, Any]:
-    """Strip markdown code fences and parse JSON robustly."""
+    """Robustly strip markdown code fences, preambles, and syntax quirks to parse JSON."""
     cleaned = text.strip()
-    if cleaned.startswith("```json"):
-        cleaned = cleaned[7:]
-    elif cleaned.startswith("```"):
-        cleaned = cleaned[3:]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3]
-    cleaned = cleaned.strip()
+    
+    # 1. Look for ```json ... ``` codeblock
+    json_block = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', cleaned, re.IGNORECASE)
+    if json_block:
+        snippet = json_block.group(1).strip()
+        try:
+            return json.loads(snippet)
+        except Exception:
+            pass
+
+    # 2. Extract first '{' to last '}'
+    start_idx = cleaned.find('{')
+    end_idx = cleaned.rfind('}')
+    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+        candidate_sub = cleaned[start_idx : end_idx + 1].strip()
+        try:
+            return json.loads(candidate_sub)
+        except Exception:
+            # Try stripping trailing commas
+            fixed = re.sub(r',\s*([\]}])', r'\1', candidate_sub)
+            try:
+                return json.loads(fixed)
+            except Exception:
+                pass
+
+    # 3. Direct parse
     return json.loads(cleaned)
 
 def generate_intelligent_fallback(resume_text: str, jd_text: str, options: Any) -> Dict[str, Any]:
@@ -360,12 +404,13 @@ def generate_intelligent_fallback(resume_text: str, jd_text: str, options: Any) 
         }
     ]
 
+    target_company = getattr(options, "target_company", None) or "the Hiring Team"
     cover_letter = (
-        f"Dear Hiring Team,\n\n"
+        f"Dear {target_company} Hiring Team,\n\n"
         f"I am writing to express my enthusiastic interest in the {target_role} position. Having reviewed the job description, "
-        f"I was immediately drawn to the opportunity to apply my full-stack engineering skills, cloud knowledge (Azure/Supabase/PostgreSQL), "
-        f"and deep interest in AI/LLM integration to build products that empower users.\n\n"
-        f"Throughout my experience, I have developed modern Next.js frontends and resilient Python backends, prioritizing performance, clean code, "
+        f"I was immediately drawn to the opportunity to apply my engineering background, technical expertise, "
+        f"and deep interest in AI/LLM integration to build high-impact products.\n\n"
+        f"Throughout my experience, I have delivered modern web applications and resilient backend services, prioritizing performance, clean code, "
         f"and measurable user value. I take pride in independently owning features from architectural design to deployment.\n\n"
         f"I welcome the opportunity to discuss how my technical skills and proactive mindset can immediately contribute to your team's success.\n\n"
         f"Sincerely,\n{candidate_name}"
@@ -404,30 +449,81 @@ async def tailor_resume(
     candidate_name: Optional[str] = None,
     candidate_email: Optional[str] = None,
     candidate_phone: Optional[str] = None,
+    candidate_location: Optional[str] = None,
+    candidate_linkedin: Optional[str] = None,
+    candidate_github: Optional[str] = None,
+    pdf_base64: Optional[str] = None,
+    pdf_filename: Optional[str] = None,
     options: Any = None
 ) -> Dict[str, Any]:
     """Orchestrate LLM tailoring with live provider or graceful fallback."""
     
     score_before, matched_before, missing_before = calculate_match_metrics(resume_text, jd_text)
     
+    # PDF thorough inspection block
+    pdf_bytes: Optional[bytes] = None
+    pdf_inspection_block = ""
+    if pdf_base64:
+        try:
+            pdf_bytes = base64.b64decode(pdf_base64)
+            inspection = inspect_pdf_thoroughly(pdf_bytes)
+            pdf_inspection_block = f"""
+================================================================================
+EXACT ORIGINAL RESUME PDF FILE INSPECTION DETAILS:
+- Source Document: {pdf_filename or 'Uploaded Resume.pdf'}
+- Total Pages: {inspection.get('page_count', 1)}
+- Extracted Tables & Grids:
+{inspection.get('tables_summary', 'None')}
+
+EXACT VERBATIM TEXT PER PAGE:
+{inspection.get('formatted_page_text', '')}
+================================================================================
+"""
+        except Exception as e:
+            print(f"PDF base64 decode/inspection note: {e}")
+
+    # Editable criteria values
+    target_role = getattr(options, 'target_role', '') or 'Aligned to Job Description'
+    target_company = getattr(options, 'target_company', '') or 'Hiring Organization'
+    seniority_level = getattr(options, 'seniority_level', '') or 'Matched to candidate experience'
+    key_skills = getattr(options, 'key_skills_to_emphasize', '') or 'Prioritize JD matching skills'
+    tone = getattr(options, 'tone', 'impact_metrics')
+    sections_list = getattr(options, 'sections_to_customize', ['summary', 'skills', 'experience', 'projects'])
+    custom_instructions = getattr(options, 'custom_instructions', '') or 'None specified'
+    generate_cover_letter = getattr(options, 'generate_cover_letter', True)
+
     user_prompt = f"""
 TARGET JOB DESCRIPTION:
 \"\"\"
 {jd_text}
 \"\"\"
 
-CANDIDATE'S ORIGINAL RESUME CONTENT:
+CANDIDATE'S ORIGINAL RESUME (EXACT EXTRACTED DETAILS FOR THOROUGH INSPECTION):
 \"\"\"
 {resume_text}
 \"\"\"
+{pdf_inspection_block}
+ADDITIONAL EDITABLE CRITERIA & USER PREFERENCES:
+- Target Role: {target_role}
+- Target Company: {target_company}
+- Career / Seniority Level: {seniority_level}
+- Key Skills & Technologies to Highlight: {key_skills}
+- Optimization Strategy & Tone: {tone}
+- Sections to Prioritize Customizing: {', '.join(sections_list)}
+- Special Focus Areas / Custom Criteria for LLM: {custom_instructions}
+- Candidate Location: {candidate_location or 'From resume'}
+- Candidate LinkedIn: {candidate_linkedin or 'From resume'}
+- Candidate GitHub: {candidate_github or 'From resume'}
+- Generate Matching Cover Letter: {generate_cover_letter}
 
-ADDITIONAL PREFERENCES:
-- Target Role: {getattr(options, 'target_role', '') or 'Aligned to JD'}
-- Tone: {getattr(options, 'tone', 'impact_metrics')}
-- Target Company: {getattr(options, 'target_company', '') or 'Hiring Organization'}
-- Sections to prioritize customizing: {', '.join(getattr(options, 'sections_to_customize', ['summary', 'skills', 'experience', 'projects']))}
-
-Please return the customized resume strictly formatted as JSON according to the instructions.
+INSTRUCTIONS FOR THE LLM:
+1. Thoroughly inspect all positions, dates, employers, technologies, and achievements in the candidate's original resume (and PDF inspection details above). Preserve the factual foundation of their career while re-framing accomplishments to match the target Job Description and the Editable Criteria.
+2. Re-frame and rephrase bullet points using active leadership verbs, relevant JD keywords, and the Google XYZ format ("Accomplished [X], as measured by [Y], by doing [Z]").
+3. Pay strict attention to any Special Focus Areas, Key Skills, and Target Role specified in the Editable Criteria.
+4. Categorize skills into logical groups, prioritizing core competencies requested in the JD and the user's focus areas.
+5. Identify any missing keywords from the JD that the candidate could realistically add.
+6. Provide a customized executive summary and an optional matching cover letter tailored for {target_company}.
+7. Return strictly valid JSON matching the required schema.
 """
 
     parsed_json = None
@@ -449,9 +545,10 @@ Please return the customized resume strictly formatted as JSON according to the 
             print(f"Error calling Hugging Face: {e}")
 
     # 2. Try Gemini if Hugging Face was not configured or didn't return
-    if not parsed_json and (settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")):
+    gemini_key_opt = getattr(options, "gemini_api_key", None) if options else None
+    if not parsed_json and (gemini_key_opt or settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")):
         try:
-            parsed_json = await call_gemini_api(user_prompt, SYSTEM_PROMPT)
+            parsed_json = await call_gemini_api(user_prompt, SYSTEM_PROMPT, gemini_key_opt, pdf_bytes)
             if parsed_json:
                 provider_used = "Google Gemini"
                 model_used = settings.GEMINI_MODEL
@@ -459,12 +556,13 @@ Please return the customized resume strictly formatted as JSON according to the 
             print(f"Error calling Gemini: {e}")
 
     # 3. Try Groq / OpenAI
-    if not parsed_json and (settings.GROQ_API_KEY or settings.OPENAI_API_KEY or os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")):
+    groq_key_opt = getattr(options, "groq_api_key", None) if options else None
+    if not parsed_json and (groq_key_opt or settings.GROQ_API_KEY or settings.OPENAI_API_KEY or os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")):
         try:
-            parsed_json = await call_groq_or_openai_api(user_prompt, SYSTEM_PROMPT)
+            parsed_json = await call_groq_or_openai_api(user_prompt, SYSTEM_PROMPT, groq_key_opt)
             if parsed_json:
                 provider_used = "Groq/OpenAI"
-                model_used = settings.GROQ_MODEL if settings.GROQ_API_KEY else settings.OPENAI_MODEL
+                model_used = settings.GROQ_MODEL if (groq_key_opt or settings.GROQ_API_KEY) else settings.OPENAI_MODEL
         except Exception as e:
             print(f"Error calling Groq/OpenAI: {e}")
 
@@ -478,10 +576,18 @@ Please return the customized resume strictly formatted as JSON according to the 
     # Override contact info if explicitly provided or detected
     if candidate_name and candidate_name != "Candidate":
         parsed_json["candidate_name"] = candidate_name
-    if candidate_email and "contact_info" in parsed_json:
+    if "contact_info" not in parsed_json or not isinstance(parsed_json["contact_info"], dict):
+        parsed_json["contact_info"] = {}
+    if candidate_email:
         parsed_json["contact_info"]["email"] = candidate_email
-    if candidate_phone and "contact_info" in parsed_json:
+    if candidate_phone:
         parsed_json["contact_info"]["phone"] = candidate_phone
+    if candidate_location:
+        parsed_json["contact_info"]["location"] = candidate_location
+    if candidate_linkedin:
+        parsed_json["contact_info"]["linkedin"] = candidate_linkedin
+    if candidate_github:
+        parsed_json["contact_info"]["github"] = candidate_github
 
     # Generate full raw markdown representation of customized resume
     raw_markdown = format_resume_as_markdown(parsed_json)

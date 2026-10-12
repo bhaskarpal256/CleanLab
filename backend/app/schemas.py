@@ -12,19 +12,32 @@ class ParseResumeResponse(BaseModel):
     detected_name: Optional[str] = None
     detected_email: Optional[str] = None
     detected_phone: Optional[str] = None
+    detected_location: Optional[str] = None
+    detected_linkedin: Optional[str] = None
+    detected_github: Optional[str] = None
+    page_count: Optional[int] = 1
+    has_tables: bool = False
     sections_detected: List[str] = []
 
 class CustomizationOptions(BaseModel):
     target_role: Optional[str] = None
+    target_company: Optional[str] = None
+    seniority_level: Optional[str] = Field(default=None, description="e.g. 'Entry-Level', 'Mid-Level', 'Senior', 'Lead'")
+    key_skills_to_emphasize: Optional[str] = Field(default=None, description="Specific tech stack to highlight")
     tone: str = Field(default="impact_metrics", description="Options: 'impact_metrics', 'balanced', 'technical', 'executive'")
     sections_to_customize: List[str] = Field(
         default=["summary", "skills", "experience", "projects"],
         description="Sections selected for customization"
     )
     generate_cover_letter: bool = True
-    target_company: Optional[str] = None
+    custom_instructions: Optional[str] = Field(default=None, description="Custom criteria, focus areas, or instructions for LLM")
+    candidate_location: Optional[str] = None
+    candidate_linkedin: Optional[str] = None
+    candidate_github: Optional[str] = None
     hf_token: Optional[str] = Field(default=None, description="Hugging Face User Access Token (hf_...)")
     hf_model: Optional[str] = Field(default=None, description="Hugging Face Model ID")
+    gemini_api_key: Optional[str] = Field(default=None, description="Optional Gemini API key")
+    groq_api_key: Optional[str] = Field(default=None, description="Optional Groq API key")
 
 class TailorResumeRequest(BaseModel):
     resume_text: str = Field(..., min_length=30, description="Extracted text from resume")
@@ -32,7 +45,12 @@ class TailorResumeRequest(BaseModel):
     candidate_name: Optional[str] = None
     candidate_email: Optional[str] = None
     candidate_phone: Optional[str] = None
+    candidate_location: Optional[str] = None
+    candidate_linkedin: Optional[str] = None
+    candidate_github: Optional[str] = None
     candidate_links: Optional[List[str]] = []
+    pdf_base64: Optional[str] = Field(default=None, description="Raw base64-encoded PDF document for direct LLM multimodal inspection")
+    pdf_filename: Optional[str] = Field(default=None, description="Original filename of the uploaded PDF")
     options: Optional[CustomizationOptions] = Field(default_factory=CustomizationOptions)
 
 class ExperienceItem(BaseModel):

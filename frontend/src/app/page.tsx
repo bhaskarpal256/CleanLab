@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 import { Navbar } from "../components/Navbar";
-import { ResumeUploader } from "../components/ResumeUploader";
+import { ResumeUploader, CandidateContactInfo } from "../components/ResumeUploader";
 import { JobDescriptionInput } from "../components/JobDescriptionInput";
 import { CustomizationSettings } from "../components/CustomizationSettings";
 import { MetricsBar } from "../components/MetricsBar";
@@ -74,6 +74,17 @@ export default function HomePage() {
   const [resumeText, setResumeText] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [parsedMetadata, setParsedMetadata] = useState<ParsedResumeResponse | null>(null);
+
+  const [pdfBase64, setPdfBase64] = useState<string | null>(null);
+  const [pdfFilename, setPdfFilename] = useState<string | null>(null);
+  const [candidateInfo, setCandidateInfo] = useState<CandidateContactInfo>({
+    name: "",
+    email: "",
+    phone: "",
+    location: "",
+    linkedin: "",
+    github: "",
+  });
 
   const [options, setOptions] = useState<CustomizationOptions>({
     target_role: "",
@@ -155,6 +166,16 @@ export default function HomePage() {
       const demo = await fetchSampleData();
       setJobDescription(demo.job_description);
       setResumeText(demo.resume_text);
+      setPdfFilename("Bhaskar_Sharma_Resume.pdf");
+      setPdfBase64(null);
+      setCandidateInfo({
+        name: "Bhaskar Sharma",
+        email: "bhaskar.sharma@example.com",
+        phone: "+91 98765 43210",
+        location: "New Delhi, India",
+        linkedin: "linkedin.com/in/bhaskar-dev",
+        github: "github.com/bhaskar-sharma",
+      });
       setParsedMetadata({
         filename: "Bhaskar_Sharma_Resume.pdf",
         file_size_bytes: 42300,
@@ -166,6 +187,11 @@ export default function HomePage() {
         detected_name: "Bhaskar Sharma",
         detected_email: "bhaskar.sharma@example.com",
         detected_phone: "+91 98765 43210",
+        detected_location: "New Delhi, India",
+        detected_linkedin: "linkedin.com/in/bhaskar-dev",
+        detected_github: "github.com/bhaskar-sharma",
+        page_count: 2,
+        has_tables: true,
         sections_detected: ["Summary", "Skills", "Experience", "Projects", "Education"],
       });
       setOptions((prev) => ({
@@ -185,6 +211,16 @@ export default function HomePage() {
     setResumeText("");
     setJobDescription("");
     setParsedMetadata(null);
+    setPdfBase64(null);
+    setPdfFilename(null);
+    setCandidateInfo({
+      name: "",
+      email: "",
+      phone: "",
+      location: "",
+      linkedin: "",
+      github: "",
+    });
     setTailoredResult(null);
     setVersions([]);
     setActiveVersionId(null);
@@ -211,9 +247,14 @@ export default function HomePage() {
       const res = await tailorResume({
         resume_text: resumeText,
         job_description: jobDescription,
-        candidate_name: parsedMetadata?.detected_name,
-        candidate_email: parsedMetadata?.detected_email,
-        candidate_phone: parsedMetadata?.detected_phone,
+        candidate_name: candidateInfo.name || parsedMetadata?.detected_name,
+        candidate_email: candidateInfo.email || parsedMetadata?.detected_email,
+        candidate_phone: candidateInfo.phone || parsedMetadata?.detected_phone,
+        candidate_location: candidateInfo.location || parsedMetadata?.detected_location,
+        candidate_linkedin: candidateInfo.linkedin || parsedMetadata?.detected_linkedin,
+        candidate_github: candidateInfo.github || parsedMetadata?.detected_github,
+        pdf_base64: pdfBase64 || undefined,
+        pdf_filename: pdfFilename || parsedMetadata?.filename || undefined,
         options: {
           ...options,
           hf_token: hfToken || undefined,
@@ -334,6 +375,12 @@ export default function HomePage() {
               parsedMetadata={parsedMetadata}
               setParsedMetadata={setParsedMetadata}
               isProcessing={isProcessing}
+              pdfBase64={pdfBase64}
+              setPdfBase64={setPdfBase64}
+              pdfFilename={pdfFilename}
+              setPdfFilename={setPdfFilename}
+              candidateInfo={candidateInfo}
+              setCandidateInfo={setCandidateInfo}
             />
 
             {/* 2. Job Description Input */}

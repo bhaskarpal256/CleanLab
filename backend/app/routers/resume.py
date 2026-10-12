@@ -3,7 +3,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
 from typing import Optional
 from ..config import settings
 from ..schemas import ParseResumeResponse, TailorResumeRequest, TailoredResumeResponse
-from ..parsers.pdf_parser import extract_text_from_pdf, detect_resume_metadata
+from ..parsers.pdf_parser import extract_text_from_pdf, detect_resume_metadata, inspect_pdf_thoroughly
 from ..parsers.docx_parser import extract_text_from_docx
 from ..services.llm_service import tailor_resume
 
@@ -109,21 +109,29 @@ async def parse_resume_file(file: UploadFile = File(...)):
         file_size_formatted = f"{file_size_bytes / (1024 * 1024):.2f} MB"
 
     # Extract text based on file format
+    page_count = 1
+    has_tables = False
+    metadata = {}
+
     try:
         if extension == ".pdf":
-            extracted_text = extract_text_from_pdf(file_bytes)
+            inspection = inspect_pdf_thoroughly(file_bytes)
+            extracted_text = inspection["extracted_text"]
+            metadata = inspection["metadata"]
+            page_count = inspection["page_count"]
+            has_tables = inspection["tables_summary"] != "None detected"
         elif extension in [".docx", ".doc"]:
             extracted_text = extract_text_from_docx(file_bytes)
+            metadata = detect_resume_metadata(extracted_text)
         else: # .txt
             extracted_text = file_bytes.decode("utf-8", errors="ignore").strip()
+            metadata = detect_resume_metadata(extracted_text)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Error parsing resume content: {str(e)}"
         )
 
-    # Analyze metadata
-    metadata = detect_resume_metadata(extracted_text)
     words = extracted_text.split()
 
     return ParseResumeResponse(
@@ -137,6 +145,11 @@ async def parse_resume_file(file: UploadFile = File(...)):
         detected_name=metadata.get("detected_name"),
         detected_email=metadata.get("detected_email"),
         detected_phone=metadata.get("detected_phone"),
+        detected_location=metadata.get("detected_location"),
+        detected_linkedin=metadata.get("detected_linkedin"),
+        detected_github=metadata.get("detected_github"),
+        page_count=page_count,
+        has_tables=has_tables,
         sections_detected=metadata.get("detected_sections", [])
     )
 
@@ -162,6 +175,11 @@ async def tailor_resume_endpoint(request: TailorResumeRequest):
             candidate_name=request.candidate_name,
             candidate_email=request.candidate_email,
             candidate_phone=request.candidate_phone,
+            candidate_location=request.candidate_location,
+            candidate_linkedin=request.candidate_linkedin,
+            candidate_github=request.candidate_github,
+            pdf_base64=request.pdf_base64,
+            pdf_filename=request.pdf_filename,
             options=request.options
         )
         return TailoredResumeResponse(**result)
