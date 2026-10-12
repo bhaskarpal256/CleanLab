@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Copy, Check, Edit2, Sparkles, Briefcase, GraduationCap, Code2, FolderGit2 } from "lucide-react";
+import { Copy, Check, Edit2, CheckCircle2, Sparkles, Briefcase, GraduationCap, Code2, FolderGit2 } from "lucide-react";
 import { TailoredResumeResponse } from "../types/resume";
 
 interface ResumePreviewProps {
@@ -11,6 +11,7 @@ interface ResumePreviewProps {
 
 export const ResumePreview: React.FC<ResumePreviewProps> = ({ data, onUpdateData }) => {
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   const handleCopy = (text: string, sectionName: string) => {
     navigator.clipboard.writeText(text);
@@ -18,8 +19,53 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ data, onUpdateData
     setTimeout(() => setCopiedSection(null), 2000);
   };
 
+  const updateSummary = (newSummary: string) => {
+    onUpdateData({
+      ...data,
+      summary: newSummary,
+    });
+  };
+
+  const updateBullet = (expIndex: number, bulletIndex: number, newBullet: string) => {
+    const newExperience = [...data.experience];
+    const targetExp = { ...newExperience[expIndex] };
+    const bullets = [...(targetExp.tailored_bullets || targetExp.original_bullets)];
+    bullets[bulletIndex] = newBullet;
+    targetExp.tailored_bullets = bullets;
+    newExperience[expIndex] = targetExp;
+
+    onUpdateData({
+      ...data,
+      experience: newExperience,
+    });
+  };
+
   return (
     <div className="relative">
+      {/* Edit Mode Toggle Bar */}
+      <div className="flex items-center justify-between mb-3 no-print">
+        <div className="text-xs text-slate-400">
+          {isEditing ? (
+            <span className="text-amber-400 font-medium">✏️ In-Line Edit Mode: Click on any text to modify</span>
+          ) : (
+            <span>Previewing ATS document (0.75-inch margins, standard fonts)</span>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setIsEditing(!isEditing)}
+          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition ${
+            isEditing
+              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+              : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+          }`}
+        >
+          {isEditing ? <CheckCircle2 className="h-3.5 w-3.5 text-amber-400" /> : <Edit2 className="h-3.5 w-3.5" />}
+          <span>{isEditing ? "Done Editing" : "Edit In-line"}</span>
+        </button>
+      </div>
+
       {/* ATS Paper Document Container */}
       <div
         id="printable-resume-container"
@@ -27,9 +73,18 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ data, onUpdateData
       >
         {/* Candidate Header */}
         <header className="border-b border-slate-200 pb-5 mb-5 text-center">
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
-            {data.candidate_name || "Bhaskar Sharma"}
-          </h1>
+          {isEditing ? (
+            <input
+              type="text"
+              value={data.candidate_name}
+              onChange={(e) => onUpdateData({ ...data, candidate_name: e.target.value })}
+              className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 text-center w-full border-b border-dashed border-indigo-400 focus:outline-none"
+            />
+          ) : (
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+              {data.candidate_name || "Bhaskar Sharma"}
+            </h1>
+          )}
 
           <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-slate-600 font-medium">
             {data.contact_info?.email && <span>{data.contact_info.email}</span>}
@@ -77,9 +132,18 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ data, onUpdateData
                 <span>{copiedSection === "summary" ? "Copied" : "Copy"}</span>
               </button>
             </div>
-            <p className="text-xs sm:text-[13px] leading-relaxed text-slate-700 font-normal text-justify">
-              {data.summary}
-            </p>
+            {isEditing ? (
+              <textarea
+                value={data.summary}
+                onChange={(e) => updateSummary(e.target.value)}
+                rows={4}
+                className="w-full text-xs sm:text-[13px] leading-relaxed text-slate-700 font-normal p-2 border border-dashed border-indigo-400 rounded focus:outline-none"
+              />
+            ) : (
+              <p className="text-xs sm:text-[13px] leading-relaxed text-slate-700 font-normal text-justify">
+                {data.summary}
+              </p>
+            )}
           </section>
         )}
 
@@ -117,8 +181,8 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ data, onUpdateData
               </h2>
             </div>
             <div className="space-y-4">
-              {data.experience.map((job, idx) => (
-                <div key={idx} className="group relative">
+              {data.experience.map((job, expIdx) => (
+                <div key={expIdx} className="group relative">
                   <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between">
                     <div>
                       <span className="font-bold text-slate-900 text-xs sm:text-sm">
@@ -138,9 +202,18 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ data, onUpdateData
                     {(job.tailored_bullets && job.tailored_bullets.length > 0
                       ? job.tailored_bullets
                       : job.original_bullets
-                    ).map((bullet, bIdx) => (
-                      <li key={bIdx} className="text-justify">
-                        {bullet}
+                    ).map((bullet, bulletIdx) => (
+                      <li key={bulletIdx} className="text-justify">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={bullet}
+                            onChange={(e) => updateBullet(expIdx, bulletIdx, e.target.value)}
+                            className="w-full border-b border-dashed border-indigo-400 focus:outline-none bg-transparent"
+                          />
+                        ) : (
+                          bullet
+                        )}
                       </li>
                     ))}
                   </ul>

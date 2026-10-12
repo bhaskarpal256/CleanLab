@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ArrowUpRight, CheckCircle2, ShieldCheck, Zap, AlertTriangle } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, ShieldCheck } from "lucide-react";
 import { TailoredResumeResponse } from "../types/resume";
 
 interface MetricsBarProps {

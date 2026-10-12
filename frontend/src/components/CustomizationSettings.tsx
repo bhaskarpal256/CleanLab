@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Sliders, Sparkles, Check, FileCheck, Layers } from "lucide-react";
+import { Sparkles, Check, Layers } from "lucide-react";
 import { CustomizationOptions } from "../types/resume";
 
 interface CustomizationSettingsProps {

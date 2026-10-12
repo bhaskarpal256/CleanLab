@@ -21,7 +21,7 @@ export const CoverLetterView: React.FC<CoverLetterViewProps> = ({
         <Mail className="h-8 w-8 mx-auto text-slate-500 mb-2" />
         <p className="text-sm font-medium">Cover letter generation was not enabled for this run.</p>
         <p className="text-xs text-slate-500 mt-1">
-          Enable the "Generate Matching Cover Letter" switch in the preferences panel and re-run.
+          Enable the &quot;Generate Matching Cover Letter&quot; switch in the preferences panel and re-run.
         </p>
       </div>
     );

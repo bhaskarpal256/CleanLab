@@ -11,10 +11,9 @@ import {
   ShieldCheck,
   Mail,
   Code,
-  CheckCircle2,
   AlertCircle,
   Zap,
-  RotateCcw,
+  History,
 } from "lucide-react";
 
 import { Navbar } from "../components/Navbar";
@@ -35,6 +34,21 @@ import {
 } from "../types/resume";
 import { checkBackendHealth, tailorResume, fetchSampleData } from "../lib/api";
 
+interface ResumeVersion {
+  id: number;
+  label: string;
+  tone: string;
+  matchScore: number;
+  data: TailoredResumeResponse;
+}
+
+const STEPPER_STAGES = [
+  "Parsing candidate resume content & structure...",
+  "Analyzing target Job Description & key competencies...",
+  "Aligning experience bullets with Google XYZ formula...",
+  "Synthesizing ATS keyword density & scoring fit...",
+];
+
 export default function HomePage() {
   const [resumeText, setResumeText] = useState("");
   const [jobDescription, setJobDescription] = useState("");
@@ -48,13 +62,28 @@ export default function HomePage() {
     target_company: "",
   });
 
+  const [versions, setVersions] = useState<ResumeVersion[]>([]);
+  const [activeVersionId, setActiveVersionId] = useState<number | null>(null);
   const [tailoredResult, setTailoredResult] = useState<TailoredResumeResponse | null>(null);
+
   const [isProcessing, setIsProcessing] = useState(false);
+  const [stepperIndex, setStepperIndex] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"resume" | "diff" | "ats" | "cover_letter" | "markdown">("resume");
   const [backendStatus, setBackendStatus] = useState<{ online: boolean; llm_engine?: string }>({
     online: false,
   });
+
+  // Cycle progressive stepper message during generation
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isProcessing) {
+      interval = setInterval(() => {
+        setStepperIndex((prev) => (prev + 1) % STEPPER_STAGES.length);
+      }, 1100);
+    }
+    return () => clearInterval(interval);
+  }, [isProcessing]);
 
   // Check backend health on mount
   useEffect(() => {
@@ -93,8 +122,9 @@ export default function HomePage() {
         target_role: demo.role_title,
         target_company: demo.company,
       }));
-    } catch (e: any) {
-      setErrorMessage("Could not load sample data: " + e.message);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Could not load sample data";
+      setErrorMessage(msg);
     } finally {
       setIsProcessing(false);
     }
@@ -105,6 +135,8 @@ export default function HomePage() {
     setJobDescription("");
     setParsedMetadata(null);
     setTailoredResult(null);
+    setVersions([]);
+    setActiveVersionId(null);
     setErrorMessage(null);
     setActiveTab("resume");
   };
@@ -123,6 +155,7 @@ export default function HomePage() {
     }
 
     try {
+      setStepperIndex(0);
       setIsProcessing(true);
       const res = await tailorResume({
         resume_text: resumeText,
@@ -133,6 +166,27 @@ export default function HomePage() {
         options,
       });
 
+      // Add to versions
+      const newVersionId = versions.length + 1;
+      const toneLabel =
+        options.tone === "impact_metrics"
+          ? "Impact & Metrics"
+          : options.tone === "technical"
+          ? "Technical"
+          : options.tone === "executive"
+          ? "Executive"
+          : "Standard ATS";
+
+      const newVersion: ResumeVersion = {
+        id: newVersionId,
+        label: `v${newVersionId} (${toneLabel})`,
+        tone: options.tone,
+        matchScore: res.match_score_after,
+        data: res,
+      };
+
+      setVersions((prev) => [...prev, newVersion]);
+      setActiveVersionId(newVersionId);
       setTailoredResult(res);
       setActiveTab("resume");
 
@@ -146,11 +200,17 @@ export default function HomePage() {
       } catch {
         // ignore
       }
-    } catch (err: any) {
-      setErrorMessage(err.message || "Failed to customize resume. Please check your backend connection.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to customize resume. Please check backend.";
+      setErrorMessage(msg);
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleSwitchVersion = (version: ResumeVersion) => {
+    setActiveVersionId(version.id);
+    setTailoredResult(version.data);
   };
 
   return (
@@ -230,18 +290,27 @@ export default function HomePage() {
               disabled={isProcessing}
               className="w-full relative group overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 p-4 text-sm font-bold text-white shadow-xl shadow-indigo-600/30 transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
             >
-              <div className="flex items-center justify-center space-x-2">
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    <span>Analyzing JD & Tailoring Resume...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-5 w-5 text-indigo-200 group-hover:rotate-12 transition-transform" />
-                    <span>Tailor Resume with AI</span>
-                    <ArrowRight className="h-4 w-4 ml-1 group-hover:translate-x-1 transition-transform" />
-                  </>
+              <div className="flex flex-col items-center justify-center space-y-1">
+                <div className="flex items-center space-x-2">
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span>Optimizing Resume with AI...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-5 w-5 text-indigo-200 group-hover:rotate-12 transition-transform" />
+                      <span>Tailor Resume with AI</span>
+                      <ArrowRight className="h-4 w-4 ml-1 group-hover:translate-x-1 transition-transform" />
+                    </>
+                  )}
+                </div>
+
+                {/* Progressive Live Stepper Message */}
+                {isProcessing && (
+                  <span className="text-[11px] text-indigo-200 font-normal animate-pulse">
+                    {STEPPER_STAGES[stepperIndex]}
+                  </span>
                 )}
               </div>
             </button>
@@ -291,6 +360,33 @@ export default function HomePage() {
             ) : (
               /* Result State */
               <div className="space-y-6">
+                {/* Bonus: Multiple Resume Versions Switcher Bar */}
+                {versions.length > 1 && (
+                  <div className="rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-3 flex flex-wrap items-center justify-between gap-2 no-print">
+                    <div className="flex items-center space-x-2 text-xs font-semibold text-indigo-300">
+                      <History className="h-4 w-4" />
+                      <span>Generated Versions:</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5">
+                      {versions.map((v) => (
+                        <button
+                          key={v.id}
+                          type="button"
+                          onClick={() => handleSwitchVersion(v)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                            activeVersionId === v.id
+                              ? "bg-indigo-600 text-white shadow-sm ring-1 ring-indigo-400"
+                              : "bg-slate-800/80 text-slate-300 hover:bg-slate-700"
+                          }`}
+                        >
+                          {v.label} <span className="text-emerald-400 font-bold ml-1">{v.matchScore}%</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Metrics Bar */}
                 <div className="no-print">
                   <MetricsBar
@@ -305,7 +401,7 @@ export default function HomePage() {
                     <div className="flex items-center gap-2">
                       <Zap className="h-4 w-4 text-amber-400 shrink-0" />
                       <span>
-                        Generated via <strong>Built-in Smart Engine</strong>. To connect live Google Gemini, add your free key in{" "}
+                        Generated via <strong>Built-in Smart Engine</strong>. To connect live Google Gemini, add your key in{" "}
                         <code className="text-amber-200">backend/.env</code>.
                       </span>
                     </div>

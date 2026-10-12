@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Briefcase, AlertCircle, Sparkles, CheckCircle2 } from "lucide-react";
+import { Sparkles, CheckCircle2 } from "lucide-react";
 
 interface JobDescriptionInputProps {
   jobDescription: string;

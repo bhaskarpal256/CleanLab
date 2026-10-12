@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { UploadCloud, FileText, CheckCircle2, AlertCircle, Edit3, X, Loader2, Sparkles } from "lucide-react";
+import { UploadCloud, FileText, AlertCircle, Edit3, X, Loader2 } from "lucide-react";
 import { ParsedResumeResponse } from "../types/resume";
 import { parseResumeFile } from "../lib/api";
 
@@ -46,8 +46,9 @@ export const ResumeUploader: React.FC<ResumeUploaderProps> = ({
       const result = await parseResumeFile(file);
       setParsedMetadata(result);
       setResumeText(result.extracted_text);
-    } catch (err: any) {
-      setErrorMessage(err.message || "Failed to extract text from file.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to extract text from file.";
+      setErrorMessage(message);
     } finally {
       setUploading(false);
     }

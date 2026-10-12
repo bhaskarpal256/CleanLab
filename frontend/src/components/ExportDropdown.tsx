@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Download, FileDown, FileText, Printer, Copy, Check, ChevronDown, Sparkles } from "lucide-react";
+import { Download, FileDown, FileText, Printer, Copy, Check, ChevronDown } from "lucide-react";
 import { TailoredResumeResponse } from "../types/resume";
 import { downloadDocxFile, downloadPlainText } from "../lib/api";
 
@@ -36,8 +36,9 @@ export const ExportDropdown: React.FC<ExportDropdownProps> = ({ data }) => {
       setDownloadingDocx(true);
       const safeName = (data.candidate_name || "Tailored_Resume").replace(/\s+/g, "_");
       await downloadDocxFile(data, `${safeName}_Customized.docx`);
-    } catch (e: any) {
-      alert("Failed to download DOCX: " + e.message);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "An unexpected error occurred";
+      alert("Failed to download DOCX: " + message);
     } finally {
       setDownloadingDocx(false);
     }

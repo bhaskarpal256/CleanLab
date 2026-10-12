@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Sparkles, FileText, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
+import { Sparkles, RefreshCw } from "lucide-react";
 
 interface NavbarProps {
   backendStatus: { online: boolean; llm_engine?: string };
