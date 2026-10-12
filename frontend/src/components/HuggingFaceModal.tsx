@@ -139,12 +139,38 @@ export const HuggingFaceModal: React.FC<HuggingFaceModalProps> = ({
 
           {/* Model selection */}
           <div>
-            <label className="text-xs font-semibold text-slate-200 mb-2 flex items-center gap-1.5">
-              <Cpu className="h-3.5 w-3.5 text-amber-400" />
-              <span>Select Hugging Face Model</span>
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                <Cpu className="h-3.5 w-3.5 text-amber-400" />
+                <span>Select or Enter Any Hugging Face Model</span>
+              </label>
+              <a
+                href="https://huggingface.co/models?pipeline_tag=text-generation&sort=trending"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] text-amber-400 hover:underline flex items-center gap-1 font-medium"
+              >
+                <span>Browse All Models</span>
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
 
-            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            {/* Custom Model ID Input */}
+            <div className="mb-3">
+              <input
+                type="text"
+                value={tempModel}
+                onChange={(e) => setTempModel(e.target.value)}
+                placeholder="e.g. meta-llama/Llama-3.3-70B-Instruct or Qwen/Qwen2.5-Coder-32B-Instruct"
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-xs text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 font-mono"
+              />
+              <span className="text-[10px] text-slate-400 mt-1 block">
+                Type or paste any text-generation model from huggingface.co above, or choose a recommended preset below:
+              </span>
+            </div>
+
+            {/* Preset Model Cards */}
+            <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
               {HF_MODELS.map((m) => {
                 const isSelected = tempModel === m.id;
                 return (
