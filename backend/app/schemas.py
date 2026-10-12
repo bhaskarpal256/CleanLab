@@ -23,6 +23,8 @@ class CustomizationOptions(BaseModel):
     )
     generate_cover_letter: bool = True
     target_company: Optional[str] = None
+    hf_token: Optional[str] = Field(default=None, description="Hugging Face User Access Token (hf_...)")
+    hf_model: Optional[str] = Field(default=None, description="Hugging Face Model ID")
 
 class TailorResumeRequest(BaseModel):
     resume_text: str = Field(..., min_length=30, description="Extracted text from resume")

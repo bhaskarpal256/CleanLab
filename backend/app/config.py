@@ -10,12 +10,14 @@ class Settings(BaseModel):
     VERSION: str = "1.0.0"
     
     # LLM Settings
+    HUGGINGFACE_API_KEY: str = os.getenv("HUGGINGFACE_API_KEY", "") or os.getenv("HF_TOKEN", "")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
     
     # Default model options
-    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "auto")  # 'gemini', 'openai', 'groq', 'auto'
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "huggingface")  # 'huggingface', 'gemini', 'openai', 'groq', 'auto'
+    HUGGINGFACE_MODEL: str = os.getenv("HUGGINGFACE_MODEL", "meta-llama/Llama-3.3-70B-Instruct")
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
     GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")

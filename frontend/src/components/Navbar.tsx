@@ -8,6 +8,8 @@ interface NavbarProps {
   onLoadDemo: () => void;
   onReset: () => void;
   isCustomizing: boolean;
+  onOpenHfModal: () => void;
+  hasHfToken: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -15,6 +17,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLoadDemo,
   onReset,
   isCustomizing,
+  onOpenHfModal,
+  hasHfToken,
 }) => {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-slate-800 bg-[#090d16]/80 backdrop-blur-md">
@@ -59,6 +63,23 @@ export const Navbar: React.FC<NavbarProps> = ({
               </>
             )}
           </div>
+
+          {/* Hugging Face Settings Button */}
+          <button
+            onClick={onOpenHfModal}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border transition ${
+              hasHfToken
+                ? "bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25"
+                : "bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"
+            }`}
+            title="Configure Hugging Face API key and model"
+          >
+            <span>🤗</span>
+            <span className="hidden sm:inline">Hugging Face</span>
+            {hasHfToken && (
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+            )}
+          </button>
 
           {/* Quick Demo Button */}
           <button

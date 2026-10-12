@@ -18,6 +18,8 @@ export interface CustomizationOptions {
   sections_to_customize: string[];
   generate_cover_letter: boolean;
   target_company?: string;
+  hf_token?: string;
+  hf_model?: string;
 }
 
 export interface ExperienceItem {

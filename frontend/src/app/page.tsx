@@ -26,6 +26,7 @@ import { DiffView } from "../components/DiffView";
 import { ATSAnalysisTab } from "../components/ATSAnalysisTab";
 import { CoverLetterView } from "../components/CoverLetterView";
 import { ExportDropdown } from "../components/ExportDropdown";
+import { HuggingFaceModal } from "../components/HuggingFaceModal";
 
 import {
   ParsedResumeResponse,
@@ -72,6 +73,20 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<"resume" | "diff" | "ats" | "cover_letter" | "markdown">("resume");
   const [backendStatus, setBackendStatus] = useState<{ online: boolean; llm_engine?: string }>({
     online: false,
+  });
+
+  const [isHfModalOpen, setIsHfModalOpen] = useState(false);
+  const [hfToken, setHfToken] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("preplab_hf_token") || "";
+    }
+    return "";
+  });
+  const [hfModel, setHfModel] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("preplab_hf_model") || "meta-llama/Llama-3.3-70B-Instruct";
+    }
+    return "meta-llama/Llama-3.3-70B-Instruct";
   });
 
   // Cycle progressive stepper message during generation
@@ -163,7 +178,11 @@ export default function HomePage() {
         candidate_name: parsedMetadata?.detected_name,
         candidate_email: parsedMetadata?.detected_email,
         candidate_phone: parsedMetadata?.detected_phone,
-        options,
+        options: {
+          ...options,
+          hf_token: hfToken || undefined,
+          hf_model: hfModel || undefined,
+        },
       });
 
       // Add to versions
@@ -221,6 +240,18 @@ export default function HomePage() {
         onLoadDemo={handleLoadDemo}
         onReset={handleReset}
         isCustomizing={isProcessing}
+        onOpenHfModal={() => setIsHfModalOpen(true)}
+        hasHfToken={Boolean(hfToken)}
+      />
+
+      {/* Hugging Face Settings Modal */}
+      <HuggingFaceModal
+        isOpen={isHfModalOpen}
+        onClose={() => setIsHfModalOpen(false)}
+        hfToken={hfToken}
+        setHfToken={setHfToken}
+        hfModel={hfModel}
+        setHfModel={setHfModel}
       />
 
       {/* Main Body */}
@@ -396,17 +427,33 @@ export default function HomePage() {
                 </div>
 
                 {/* Model Engine Badge Notice */}
-                {tailoredResult.is_demo_mode && (
+                {tailoredResult.provider_used === "Hugging Face" ? (
+                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-3 text-xs text-emerald-300 flex items-center justify-between no-print">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🤗</span>
+                      <span>
+                        Tailored using <strong>Hugging Face LLM API</strong> ({tailoredResult.model_used}).
+                      </span>
+                    </div>
+                  </div>
+                ) : tailoredResult.is_demo_mode ? (
                   <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-3 text-xs text-amber-300 flex items-center justify-between no-print">
                     <div className="flex items-center gap-2">
                       <Zap className="h-4 w-4 text-amber-400 shrink-0" />
                       <span>
-                        Generated via <strong>Built-in Smart Engine</strong>. To connect live Google Gemini, add your key in{" "}
-                        <code className="text-amber-200">backend/.env</code>.
+                        Generated via <strong>Built-in Smart Engine</strong>. To connect live <strong>Hugging Face</strong>, click the{" "}
+                        <button
+                          type="button"
+                          onClick={() => setIsHfModalOpen(true)}
+                          className="font-bold underline text-amber-200 hover:text-white"
+                        >
+                          🤗 Hugging Face
+                        </button>{" "}
+                        button in the navbar to add your free access token.
                       </span>
                     </div>
                   </div>
-                )}
+                ) : null}
 
                 {/* Tab Navigation & Export Actions */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3 no-print">

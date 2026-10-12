@@ -120,7 +120,70 @@ async def call_gemini_api(prompt: str, system_instruction: str) -> Optional[Dict
             return clean_and_parse_json(response.text.strip())
         except Exception as inner_e:
             print(f"Fallback Gemini model also failed: {inner_e}")
-            return None
+async def call_huggingface_api(
+    prompt: str,
+    system_instruction: str,
+    hf_token: Optional[str] = None,
+    hf_model: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """Call Hugging Face Router / Inference API (https://router.huggingface.co/v1/chat/completions)."""
+    token = hf_token or settings.HUGGINGFACE_API_KEY or os.getenv("HUGGINGFACE_API_KEY") or os.getenv("HF_TOKEN")
+    if not token:
+        return None
+
+    model = hf_model or settings.HUGGINGFACE_MODEL or "meta-llama/Llama-3.3-70B-Instruct"
+
+    url = "https://router.huggingface.co/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.2,
+        "max_tokens": 3000,
+        "response_format": {"type": "json_object"}
+    }
+
+    async with httpx.AsyncClient(timeout=90.0) as client:
+        try:
+            resp = await client.post(url, headers=headers, json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                content = data["choices"][0]["message"]["content"]
+                return clean_and_parse_json(content)
+            elif resp.status_code == 400:
+                # Retry without response_format if model lacks json_object parameter support
+                payload.pop("response_format", None)
+                resp = await client.post(url, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    content = data["choices"][0]["message"]["content"]
+                    return clean_and_parse_json(content)
+            print(f"Hugging Face API error ({resp.status_code}): {resp.text}")
+        except Exception as e:
+            print(f"Hugging Face API request failed: {e}")
+
+    # Fallback to alternative popular HF model e.g. Qwen/Qwen2.5-72B-Instruct
+    if model != "Qwen/Qwen2.5-72B-Instruct":
+        try:
+            payload["model"] = "Qwen/Qwen2.5-72B-Instruct"
+            payload.pop("response_format", None)
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                resp = await client.post(url, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    content = data["choices"][0]["message"]["content"]
+                    return clean_and_parse_json(content)
+        except Exception as e:
+            print(f"Hugging Face fallback model request failed: {e}")
+
+    return None
 
 async def call_groq_or_openai_api(prompt: str, system_instruction: str) -> Optional[Dict[str, Any]]:
     """Call Groq or OpenAI compatible API endpoint."""
@@ -372,8 +435,21 @@ Please return the customized resume strictly formatted as JSON according to the 
     model_used = "heuristic-v1"
     is_demo = False
 
-    # 1. Try Gemini
-    if settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY"):
+    # 1. Try Hugging Face API
+    hf_token_opt = getattr(options, "hf_token", None) if options else None
+    hf_model_opt = getattr(options, "hf_model", None) if options else None
+
+    if hf_token_opt or settings.HUGGINGFACE_API_KEY or os.getenv("HUGGINGFACE_API_KEY") or os.getenv("HF_TOKEN"):
+        try:
+            parsed_json = await call_huggingface_api(user_prompt, SYSTEM_PROMPT, hf_token_opt, hf_model_opt)
+            if parsed_json:
+                provider_used = "Hugging Face"
+                model_used = hf_model_opt or settings.HUGGINGFACE_MODEL
+        except Exception as e:
+            print(f"Error calling Hugging Face: {e}")
+
+    # 2. Try Gemini if Hugging Face was not configured or didn't return
+    if not parsed_json and (settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")):
         try:
             parsed_json = await call_gemini_api(user_prompt, SYSTEM_PROMPT)
             if parsed_json:
@@ -382,7 +458,7 @@ Please return the customized resume strictly formatted as JSON according to the 
         except Exception as e:
             print(f"Error calling Gemini: {e}")
 
-    # 2. Try Groq / OpenAI if Gemini not set or failed
+    # 3. Try Groq / OpenAI
     if not parsed_json and (settings.GROQ_API_KEY or settings.OPENAI_API_KEY or os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")):
         try:
             parsed_json = await call_groq_or_openai_api(user_prompt, SYSTEM_PROMPT)
@@ -392,7 +468,7 @@ Please return the customized resume strictly formatted as JSON according to the 
         except Exception as e:
             print(f"Error calling Groq/OpenAI: {e}")
 
-    # 3. If no API key configured or external API error, use intelligent fallback
+    # 4. If no external API key configured or API error, use intelligent fallback
     if not parsed_json:
         parsed_json = generate_intelligent_fallback(resume_text, jd_text, options)
         provider_used = "Built-in Smart AI Engine (Demo Mode)"
