@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useSyncExternalStore } from "react";
 import confetti from "canvas-confetti";
 import {
   Sparkles,
@@ -50,6 +50,26 @@ const STEPPER_STAGES = [
   "Synthesizing ATS keyword density & scoring fit...",
 ];
 
+function subscribeToStorage(callback: () => void) {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener("storage", callback);
+  return () => window.removeEventListener("storage", callback);
+}
+
+function useStoredValue(key: string, defaultValue: string) {
+  return useSyncExternalStore(
+    subscribeToStorage,
+    () => {
+      try {
+        return localStorage.getItem(key) ?? defaultValue;
+      } catch {
+        return defaultValue;
+      }
+    },
+    () => defaultValue
+  );
+}
+
 export default function HomePage() {
   const [resumeText, setResumeText] = useState("");
   const [jobDescription, setJobDescription] = useState("");
@@ -76,18 +96,34 @@ export default function HomePage() {
   });
 
   const [isHfModalOpen, setIsHfModalOpen] = useState(false);
-  const [hfToken, setHfToken] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("preplab_hf_token") || "";
+  const storedHfToken = useStoredValue("preplab_hf_token", "");
+  const storedHfModel = useStoredValue("preplab_hf_model", "meta-llama/Llama-3.3-70B-Instruct");
+
+  const [customHfToken, setCustomHfToken] = useState<string | null>(null);
+  const [customHfModel, setCustomHfModel] = useState<string | null>(null);
+
+  const hfToken = customHfToken !== null ? customHfToken : storedHfToken;
+  const hfModel = customHfModel !== null ? customHfModel : storedHfModel;
+
+  const handleUpdateHfToken = (token: string) => {
+    setCustomHfToken(token);
+    try {
+      localStorage.setItem("preplab_hf_token", token);
+      window.dispatchEvent(new Event("storage"));
+    } catch {
+      // ignore
     }
-    return "";
-  });
-  const [hfModel, setHfModel] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("preplab_hf_model") || "meta-llama/Llama-3.3-70B-Instruct";
+  };
+
+  const handleUpdateHfModel = (model: string) => {
+    setCustomHfModel(model);
+    try {
+      localStorage.setItem("preplab_hf_model", model);
+      window.dispatchEvent(new Event("storage"));
+    } catch {
+      // ignore
     }
-    return "meta-llama/Llama-3.3-70B-Instruct";
-  });
+  };
 
   // Cycle progressive stepper message during generation
   useEffect(() => {
@@ -249,9 +285,9 @@ export default function HomePage() {
         isOpen={isHfModalOpen}
         onClose={() => setIsHfModalOpen(false)}
         hfToken={hfToken}
-        setHfToken={setHfToken}
+        setHfToken={handleUpdateHfToken}
         hfModel={hfModel}
-        setHfModel={setHfModel}
+        setHfModel={handleUpdateHfModel}
       />
 
       {/* Main Body */}

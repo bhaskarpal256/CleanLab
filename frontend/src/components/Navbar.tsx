@@ -67,6 +67,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Hugging Face Settings Button */}
           <button
             onClick={onOpenHfModal}
+            suppressHydrationWarning
             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border transition ${
               hasHfToken
                 ? "bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25"
@@ -77,7 +78,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>🤗</span>
             <span className="hidden sm:inline">Hugging Face</span>
             {hasHfToken && (
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" suppressHydrationWarning></span>
             )}
           </button>
 
