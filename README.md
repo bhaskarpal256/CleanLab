@@ -1,194 +1,154 @@
 # 📄 CleanLab Resume — Intelligent Resume Customizer & ATS Tailor
 
-> Built for the **Full-Stack Developer (AI & Mobile Apps)** assignment at **ThePrepLab (Innovista Labs)**.
-
-An AI-powered web application that takes a Job Description (JD) and a candidate's resume (PDF, DOCX, or text), analyzes key requirements with LLMs, and customizes the resume to maximize ATS match score, keyword alignment, and interview conversion rates.
+An AI-powered full-stack web application that tailors a candidate's resume to match any target Job Description (JD). It extracts real experiences from uploaded PDF or Word documents, highlights matching competencies, rephrases accomplishments using measurable impact formulas, and optimizes formatting for Applicant Tracking Systems (ATS).
 
 ---
 
-## 🌟 Live Demo & Preview
+## 🌟 Architecture & Tech Stack
 
-- **Frontend**: Next.js 16 (React 19, TypeScript, Tailwind CSS)
-- **Backend API**: Python 3 (FastAPI, Uvicorn, OpenAPI docs at `/docs`)
-- **LLM Engine**: Google Gemini (via Google AI Studio) + Groq/OpenAI compatible fallback + Built-in Smart Demo Engine
-
----
-
-## 🚀 Key Features
-
-### 1. Core Requirements
-- **Job Description Input**: Clean textarea with real-time character/word count, minimum length validation (>= 30 characters), and pre-set role presets.
-- **Resume Upload**: Full support for **PDF** and **DOCX** files with drag-and-drop, instant file badge (name, size, type), text extraction, and contact detail detection (email, phone, name).
-- **LLM-Powered Customization**:
-  - Rewrites the **Summary / Objective** to align with the core target responsibilities.
-  - Reorganizes and highlights **Relevant Skills** matching the JD keywords.
-  - Reorders and rephrases **Experience Bullets** using active verbs and the Google XYZ impact formula.
-  - Identifies **Missing Keywords** with actionable recommendations.
-- **Output Display**: Clean ATS document viewer with section copy helpers.
-- **Multi-Format Downloads**:
-  - **PDF Export**: Print-ready, executive ATS document formatting with 0.75-inch margins.
-  - **Microsoft Word (.DOCX)**: Server-generated `.docx` with ATS headers, bullet points, and typography.
-  - **Markdown (.md)** & **Plain Text (.txt)**.
-- **Error Handling**: Graceful validation of file sizes (<10MB), corrupt documents, short text inputs, and API timeouts.
-
-### 2. Bonus Features Implemented
-- 🎯 **Match Score (%)**: Displays before and after match percentages (e.g., 48% ➔ 80%+) with score boost badge.
-- 🛡️ **ATS Compliance Score (0-100)**: Evaluates contact information, measurable metric density, active verbs, and standard headings with an itemized checklist.
-- 🔀 **Interactive Diff View**: Visual side-by-side / stacked comparison of original vs tailored bullets and summary, including AI rationale.
-- 🎛️ **Section-Wise Customization**: Toggle individual sections to customize (Summary, Skills, Experience, Projects).
-- 🎭 **Multiple Resume Strategies & Tones**: Choose between *Impact & Metrics*, *Technical Specialist*, *Executive & Ownership*, or *Standard ATS*.
-- ✉️ **Role-Tailored Cover Letter Generator**: Generates a professional cover letter matched to the candidate and company with 1-click copy and `.txt` download.
-- ⚡ **1-Click Demo Case Loader**: Instantly loads the ThePrepLab Full-Stack Developer JD and sample resume for evaluation in 5 seconds.
+- **Frontend**: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4
+- **Backend API**: Python 3.11, FastAPI, Uvicorn (OpenAPI docs available at `/docs`)
+- **Document Parsers**: `pdfplumber`, `pypdf`, `python-docx`
+- **Document Exporter**: `python-docx` (clean Word generator) + native print stylesheet (pixel-perfect 1-page PDF export)
+- **Primary AI Engine**: **Groq Cloud API** (`openai/gpt-oss-120b` & `llama-3.3-70b-versatile` for sub-second responses)
+- **Alternative AI Engines**: Google Gemini 1.5 Flash, OpenAI (`gpt-4o-mini`)
+- **Offline Fallback**: Intelligent heuristic NLP engine that tailors resumes even when offline or without external API keys
 
 ---
 
-## 🏗️ Architecture & System Design
+## 🚀 Key Capabilities
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                   Next.js 16 Frontend                       │
-│  - Resume Dropzone (PDF / DOCX)                             │
-│  - Target Job Description Input + Presets                   │
-│  - Customization Settings (Tone, Sections, Cover Letter)    │
-│  - ATS Paper Document Preview & In-line Copy                │
-│  - Interactive Diff View & ATS Checklist Diagnostics        │
-│  - Export Actions (Print PDF, Download DOCX, MD, TXT)       │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                      REST API (JSON / FormData)
-                               │
-┌──────────────────────────────▼──────────────────────────────┐
-│                    Python FastAPI Backend                   │
-│  - POST /api/parse-resume  (pdfplumber / python-docx)       │
-│  - POST /api/tailor-resume (LLM Orchestration & Prompt)     │
-│  - POST /api/export/docx   (python-docx generation)         │
-│  - GET  /api/health        (Healthcheck & LLM provider)     │
-│  - GET  /api/sample-data   (ThePrepLab Demo Case)           │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-            Structured Prompting & JSON Schema
-                               │
-┌──────────────────────────────▼──────────────────────────────┐
-│                     LLM API Provider                        │
-│  - Primary: Google Gemini 1.5 Flash (Google AI Studio)      │
-│  - Optional: Groq (Llama 3.3) / OpenAI (GPT-4o-mini)        │
-│  - Fallback: Built-in Smart Heuristic Engine                │
-└─────────────────────────────────────────────────────────────┘
-```
+1. **Robust Multi-Page Document Parsing**:
+   - Accepts `.pdf`, `.docx`, `.doc`, and `.txt` files up to 10 MB.
+   - Extracts candidate contact info (email, phone, location, LinkedIn, GitHub, portfolio) automatically using regex heuristics and PDF link annotations.
+   - Accurately identifies key sections (Experience, Projects, Education, Skills, Summary).
+
+2. **Targeted AI Resume Customization**:
+   - **Google XYZ Framework**: Rephrases bullets to highlight *Accomplished [X], as measured by [Y], by doing [Z]*.
+   - **Competency Grouping**: Dynamically maps candidate skills to competencies demanded by the job description.
+   - **Multiple Tailoring Lenses**: Switch between *Impact & Metrics*, *Technical Specialist*, *Executive Leadership*, or *Standard ATS*.
+   - **Strict Anti-Hallucination Guardrails**: Prompts explicitly forbid inventing false employers, degrees, or titles. All tailoring builds strictly on candidate's authentic background.
+
+3. **ATS Diagnostics & Match Scoring**:
+   - Calculates **Before & After Match Scores** to demonstrate quantifiable alignment.
+   - Evaluates overall ATS compliance (0–100) with a categorized checklist covering formatting, action verb density, measurable metrics, and contact completeness.
+   - Highlights missing high-value keywords that candidates can realistically incorporate.
+
+4. **Interactive Editing & Exporting**:
+   - **Live In-line Editing**: Directly edit any section on the rendered resume paper before exporting.
+   - **Version History**: Generate multiple tailored variations with different lenses and switch between them seamlessly.
+   - **Visual Diff View**: Side-by-side comparison of original vs. tailored statements with recruiter rationale.
+   - **Multi-Format Export**: One-click ATS PDF (via browser print), `.docx` (Microsoft Word), Markdown (`.md`), and Plain Text (`.txt`).
+   - **Matching Cover Letter**: Auto-generates a personalized cover letter matching candidate experience to the company and role.
 
 ---
 
-## 🛠️ Tech Stack
+## 📦 Setup & Run Instructions
 
-| Layer | Technology | Details |
-|---|---|---|
-| **Frontend** | Next.js 16 (App Router), React 19, TypeScript | Server and Client components, modular design |
-| **Styling** | Tailwind CSS v4, Lucide React, Canvas Confetti | Executive glassmorphic UI + print ATS stylesheet |
-| **Backend** | Python 3.11+, FastAPI, Uvicorn | Async REST API with Pydantic validation |
-| **Document Parsers** | `pdfplumber`, `pypdf`, `python-docx` | Robust multi-page PDF & DOCX text extraction |
-| **Document Exporter** | `python-docx` | Generates formatted Microsoft Word resumes |
-| **AI / LLM** | Google Gemini (`google-generativeai`), Groq, OpenAI | Temperature 0.2, strict JSON schema output |
+### 1. Prerequisites
+- **Node.js** 18+ and **npm**
+- **Python** 3.10+ (Python 3.11 recommended)
+- **Git**
 
----
+### 2. Local Setup (Step-by-Step)
 
-## 📦 Setup & Run Instructions (Local)
-
-### Prerequisites
-- Node.js 18+ and npm
-- Python 3.10+
-- Git
-
-### 1. Clone Repository
+#### Option A: Quickstart Script (Mac / Linux)
 ```bash
-git clone https://github.com/your-username/ResumeBuilder.git
-cd ResumeBuilder
+git clone https://github.com/bhaskarpal256/CleanLab.git
+cd CleanLab
+
+# Run the automated launch script (starts both backend and frontend)
+./start.sh
 ```
 
-### 2. Backend Setup
-```bash
-cd backend
+#### Option B: Manual Setup
 
-# Create virtual environment
+**Terminal 1 — Backend (FastAPI)**:
+```bash
+cd CleanLab/backend
+
+# Create and activate Python virtual environment
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Configure environment variables
+# Configure environment
 cp .env.example .env
-# Open .env and add your GEMINI_API_KEY (optional; app works in demo mode without it)
+# Edit backend/.env and ensure GROQ_API_KEY is present
 
 # Start backend server
-python run.py
-# Server runs on http://localhost:8000 (OpenAPI docs at http://localhost:8000/docs)
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# API runs on http://localhost:8000 (Interactive docs at http://localhost:8000/docs)
 ```
 
-### 3. Frontend Setup
-In a new terminal window:
+**Terminal 2 — Frontend (Next.js)**:
 ```bash
-cd frontend
+cd CleanLab/frontend
 
 # Install dependencies
 npm install
-
-# Configure environment variables
-cp .env.example .env.local
 
 # Start development server
 npm run dev
 # Frontend runs on http://localhost:3000
 ```
 
-Open **`http://localhost:3000`** in your browser!
+---
+
+## 🌐 Production Deployment
+
+### Backend (Render — Free Tier)
+1. In the **Render Dashboard**, click **New +** → **Web Service** and select this repo (`CleanLab`).
+2. Set configuration:
+   - **Runtime**: `Python 3`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+3. Under **Environment Variables**, add:
+   - `GROQ_API_KEY`: *(your Groq API key)*
+   - `GROQ_MODEL`: `openai/gpt-oss-120b`
+   - `LLM_PROVIDER`: `groq`
+4. Click **Deploy Web Service** and note your public URL (e.g. `https://cleanlab-api.onrender.com`).
+
+### Frontend (Vercel — Free Tier)
+1. Import your `CleanLab` repository into [Vercel](https://vercel.com).
+2. Set **Root Directory** to `frontend`.
+3. Add Environment Variable:
+   - **Key**: `NEXT_PUBLIC_API_URL`
+   - **Value**: `https://your-backend-name.onrender.com` *(no trailing slash)*
+4. Click **Deploy**.
 
 ---
 
-## 🐳 Docker Deployment (Optional)
+## 🤖 AI Tools & Prompt Engineering Notes
 
-Run the full stack with a single command:
-```bash
-docker compose up --build
-```
-- Frontend: `http://localhost:3000`
-- Backend: `http://localhost:8000`
+### 1. AI Models Used
+- **Groq Cloud API (`openai/gpt-oss-120b` & `llama-3.3-70b-versatile`)**:
+  - Chosen for near-instant inference speeds (< 1.5 seconds per complete resume customization).
+  - High reasoning capability for understanding nuanced technical job descriptions and candidate project impact.
+- **Google Gemini 1.5 Flash**:
+  - Configured as an optional secondary cloud provider via Google AI Studio.
+- **Rule-Based Heuristic NLP Fallback**:
+  - If third-party cloud APIs are unreachable, rate-limited, or keys are missing, the system automatically falls back to an offline smart rephrasing engine so the candidate never experiences a broken application.
 
----
-
-## 🌐 Cloud Deployment Options
-
-### Frontend (Vercel)
-1. Push repo to GitHub.
-2. Import project into [Vercel](https://vercel.com).
-3. Set Root Directory to `frontend`.
-4. Add Environment Variable:
-   - `NEXT_PUBLIC_API_URL`: `https://your-backend-url.onrender.com`
-5. Deploy!
-
-### Backend (Render / Railway / GCP Cloud Run)
-1. Deploy `backend` folder as a Python web service or Docker container.
-2. Build Command: `pip install -r requirements.txt`
-3. Start Command: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
-4. Set Environment Variables:
-   - `GEMINI_API_KEY`: `your_key_here`
-   - `PORT`: `8000`
+### 2. Prompt Engineering Strategy
+- **Role Persona**: Frames the AI as an elite technical recruiter and certified professional resume writer (CPRW).
+- **Google XYZ Formula**: Forces output bullets into quantifiable action statements: *Accomplished [X], as measured by [Y], by doing [Z]*.
+- **Strict Pydantic JSON Schema**: Constrains model generation to valid structured JSON with explicit types, eliminating markdown parsing errors.
+- **Anti-Hallucination Guardrails**: Prompts explicitly forbid inventing employers, dates, degrees, or certifications that are not substantiated by the candidate's uploaded resume.
 
 ---
 
-## 💡 Prompt Engineering & LLM Design
+## 💡 Developer Notes & Engineering Decisions
 
-- **System Instruction**: Enforces the role of an Elite Tech Recruiter and ATS Optimization Architect.
-- **Truthful Enhancements**: Explicitly prohibits hallucinating false employers or degrees while applying the **Google XYZ framework** (`Accomplished [X], as measured by [Y], by doing [Z]`).
-- **Structured JSON Schema**: Model output is constrained to an exact Pydantic schema, eliminating parsing errors.
-- **Dual Verification**: Matches keywords before and after tailoring to measure authentic percentage improvements.
-
----
-
-## ⚖️ Trade-offs & Known Limitations
-- **Scanned Image PDFs**: If a user uploads a PDF that consists purely of scanned raster images without OCR text layer, text extraction requires an OCR library like Tesseract. The current pipeline detects empty extractions and notifies the user with a helpful alert.
-- **LLM Rate Limits**: Free tier Google AI Studio keys have rate limits (15 requests/min). The backend includes retry logic and automatically switches to the built-in smart engine if rate limits or network errors occur.
+- **Pure White Paper Styling**: While the UI features a modern dark/light mode toggle with smooth glassmorphic cards, the resume document itself strictly remains pure white with classic typography (`#0f172a`, standard margins). This guarantees that ATS scanners and print previews match real-world executive standard formatting.
+- **Zero-Flicker Theme Synchronization**: Theme preference is managed via React's `useSyncExternalStore` and `localStorage`, avoiding layout shifts or cascading re-renders on initial page hydration.
+- **Browser Extension Isolation**: Implemented proactive DOM neutralizers and CSS isolation to prevent third-party job extensions (like Careerflow) from injecting unwanted floating overlays into the workspace.
+- **Two-Way Deployment Compatibility**: Root deployment files (`render.yaml`, `your_application/wsgi.py`, and `main.py`) support both native Uvicorn and Render's default Gunicorn commands out of the box.
 
 ---
 
-## 👥 Author
-Submitted for the Full-Stack Developer role at **ThePrepLab / Innovista Labs**.
+## 👥 Author & Repository
+* **Repository**: [https://github.com/bhaskarpal256/CleanLab](https://github.com/bhaskarpal256/CleanLab)
+* **Author**: Bhaskar Pal
