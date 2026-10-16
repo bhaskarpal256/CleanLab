@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { GitCompare, CheckCircle2, Sparkles, TrendingUp } from "lucide-react";
+import { GitCompare, CheckCircle2, TrendingUp } from "lucide-react";
 import { TailoredResumeResponse } from "../types/resume";
 
 interface DiffViewProps {

@@ -6,14 +6,8 @@ import {
   Check,
   Edit2,
   CheckCircle2,
-  Sparkles,
-  Briefcase,
-  GraduationCap,
-  Code2,
-  FolderGit2,
   FileCheck2,
   Layers,
-  Award,
 } from "lucide-react";
 import { TailoredResumeResponse } from "../types/resume";
 

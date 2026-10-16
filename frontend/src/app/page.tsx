@@ -12,7 +12,6 @@ import {
   Mail,
   Code,
   AlertCircle,
-  Zap,
   History,
   CheckCircle2,
 } from "lucide-react";
@@ -50,24 +49,24 @@ const STEPPER_STAGES = [
   "Checking keyword alignment & ATS readiness...",
 ];
 
-function subscribeToStorage(callback: () => void) {
+function subscribeTheme(callback: () => void) {
   if (typeof window === "undefined") return () => {};
   window.addEventListener("storage", callback);
   return () => window.removeEventListener("storage", callback);
 }
 
-function useStoredValue(key: string, defaultValue: string) {
-  return useSyncExternalStore(
-    subscribeToStorage,
-    () => {
-      try {
-        return localStorage.getItem(key) ?? defaultValue;
-      } catch {
-        return defaultValue;
-      }
-    },
-    () => defaultValue
-  );
+function getThemeSnapshot(): "dark" | "light" {
+  if (typeof window === "undefined") return "dark";
+  try {
+    const saved = localStorage.getItem("cleanlab_theme") || localStorage.getItem("preplab_theme");
+    return saved === "light" ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
+function getServerThemeSnapshot(): "dark" | "light" {
+  return "dark";
 }
 
 export default function HomePage() {
@@ -108,38 +107,26 @@ export default function HomePage() {
     online: false,
   });
 
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const storedTheme = useSyncExternalStore(subscribeTheme, getThemeSnapshot, getServerThemeSnapshot);
+  const [customTheme, setCustomTheme] = useState<"dark" | "light" | null>(null);
+  const theme = customTheme ?? storedTheme;
 
   useEffect(() => {
-    try {
-      const savedTheme = (localStorage.getItem("cleanlab_theme") || localStorage.getItem("preplab_theme")) as "dark" | "light" | null;
-      if (savedTheme === "light" || savedTheme === "dark") {
-        setTheme(savedTheme);
-        if (savedTheme === "light") {
-          document.documentElement.classList.remove("dark");
-          document.documentElement.classList.add("light");
-        } else {
-          document.documentElement.classList.remove("light");
-          document.documentElement.classList.add("dark");
-        }
-      }
-    } catch {
-      // ignore
+    if (theme === "light") {
+      document.documentElement.classList.remove("dark");
+      document.documentElement.classList.add("light");
+    } else {
+      document.documentElement.classList.remove("light");
+      document.documentElement.classList.add("dark");
     }
-  }, []);
+  }, [theme]);
 
   const handleToggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
+    setCustomTheme(next);
     try {
       localStorage.setItem("cleanlab_theme", next);
-      if (next === "light") {
-        document.documentElement.classList.remove("dark");
-        document.documentElement.classList.add("light");
-      } else {
-        document.documentElement.classList.remove("light");
-        document.documentElement.classList.add("dark");
-      }
+      window.dispatchEvent(new Event("storage"));
     } catch {
       // ignore
     }

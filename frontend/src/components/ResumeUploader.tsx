@@ -13,8 +13,6 @@ import {
   ChevronUp,
   User,
   ShieldCheck,
-  AlertTriangle,
-  XCircle,
 } from "lucide-react";
 import { ParsedResumeResponse } from "../types/resume";
 import { parseResumeFile, fileToBase64 } from "../lib/api";
