@@ -42,27 +42,25 @@ def root():
 
 @app.get("/api/health")
 def health_check():
-    hf_configured = bool(settings.HUGGINGFACE_API_KEY or os.getenv("HUGGINGFACE_API_KEY") or os.getenv("HF_TOKEN"))
-    gemini_configured = bool(settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY"))
     groq_configured = bool(settings.GROQ_API_KEY or os.getenv("GROQ_API_KEY"))
     openai_configured = bool(settings.OPENAI_API_KEY or os.getenv("OPENAI_API_KEY"))
+    gemini_configured = bool(settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY"))
     
-    active_engine = "Hugging Face" if hf_configured else ("Gemini" if gemini_configured else ("Groq" if groq_configured else ("OpenAI" if openai_configured else "Smart Built-in Engine")))
+    active_engine = "Groq" if groq_configured else ("OpenAI" if openai_configured else ("Gemini" if gemini_configured else "Smart Built-in Engine"))
     
     return {
         "status": "healthy",
         "uptime_seconds": int(time.time() - START_TIME),
         "llm_engine": active_engine,
         "providers": {
-            "huggingface": hf_configured,
-            "gemini": gemini_configured,
             "groq": groq_configured,
-            "openai": openai_configured
+            "openai": openai_configured,
+            "gemini": gemini_configured,
         },
         "models": {
-            "huggingface_model": settings.HUGGINGFACE_MODEL,
+            "groq_model": settings.GROQ_MODEL,
+            "openai_model": settings.OPENAI_MODEL,
             "gemini_model": settings.GEMINI_MODEL,
-            "groq_model": settings.GROQ_MODEL
         }
     }
 

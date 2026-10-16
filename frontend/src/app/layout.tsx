@@ -9,9 +9,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "PrepLab AI — Smart Resume Customizer & ATS Tailor",
+  title: "CleanLab Resume — Smart Resume Customizer & ATS Tailor",
   description: "Intelligently tailor your resume to any Job Description with AI. Rewrite summaries, optimize experience bullets, discover missing keywords, and export ATS-ready PDF/DOCX.",
-  keywords: ["resume customizer", "AI resume builder", "ATS optimizer", "job description matcher", "ThePrepLab"],
+  keywords: ["resume customizer", "AI resume builder", "ATS optimizer", "job description matcher", "CleanLab Resume"],
   authors: [{ name: "Full-Stack Developer Candidate" }],
 };
 
@@ -29,7 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} dark`} suppressHydrationWarning>
       <body
-        className="min-h-screen bg-[#090d16] text-slate-100 font-sans selection:bg-indigo-500 selection:text-white"
+        className="min-h-screen bg-slate-50 text-slate-900 dark:bg-[#090d16] dark:text-slate-100 font-sans selection:bg-indigo-500 selection:text-white transition-colors duration-200"
         suppressHydrationWarning
       >
         {children}

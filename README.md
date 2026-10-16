@@ -1,4 +1,4 @@
-# 📄 PrepLab ResumeAI — Intelligent Resume Customizer & ATS Tailor
+# 📄 CleanLab Resume — Intelligent Resume Customizer & ATS Tailor
 
 > Built for the **Full-Stack Developer (AI & Mobile Apps)** assignment at **ThePrepLab (Innovista Labs)**.
 

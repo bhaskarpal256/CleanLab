@@ -12,9 +12,13 @@ export interface ParsedResumeResponse {
   detected_location?: string;
   detected_linkedin?: string;
   detected_github?: string;
+  detected_portfolio?: string;
   page_count?: number;
   has_tables?: boolean;
   sections_detected: string[];
+  detected_projects?: string[];
+  initial_ats_score?: number;
+  ats_evaluation?: ATSEvaluation;
 }
 
 export interface CustomizationOptions {
@@ -29,8 +33,11 @@ export interface CustomizationOptions {
   candidate_location?: string;
   candidate_linkedin?: string;
   candidate_github?: string;
-  hf_token?: string;
-  hf_model?: string;
+  candidate_portfolio?: string;
+  gemini_api_key?: string;
+  groq_api_key?: string;
+  iteration_seed?: number;
+  variation_angle?: string;
 }
 
 export interface ExperienceItem {
@@ -94,6 +101,7 @@ export interface TailoredResumeResponse {
     location?: string;
     linkedin?: string;
     github?: string;
+    portfolio?: string;
   };
   summary: string;
   original_summary?: string;
@@ -101,10 +109,14 @@ export interface TailoredResumeResponse {
   experience: ExperienceItem[];
   education: EducationItem[];
   projects: ProjectItem[];
+  achievements?: string[];
   cover_letter?: string;
   diff_summary: string[];
   raw_markdown: string;
   provider_used: string;
   model_used: string;
+  tailoring_lens?: string;
   is_demo_mode: boolean;
+  api_error_message?: string;
+  api_warning?: string;
 }

@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Zap,
   History,
+  CheckCircle2,
 } from "lucide-react";
 
 import { Navbar } from "../components/Navbar";
@@ -26,28 +27,27 @@ import { DiffView } from "../components/DiffView";
 import { ATSAnalysisTab } from "../components/ATSAnalysisTab";
 import { CoverLetterView } from "../components/CoverLetterView";
 import { ExportDropdown } from "../components/ExportDropdown";
-import { HuggingFaceModal } from "../components/HuggingFaceModal";
-
 import {
   ParsedResumeResponse,
   TailoredResumeResponse,
   CustomizationOptions,
 } from "../types/resume";
-import { checkBackendHealth, tailorResume, fetchSampleData } from "../lib/api";
+import { checkBackendHealth, tailorResume } from "../lib/api";
 
 interface ResumeVersion {
   id: number;
   label: string;
   tone: string;
   matchScore: number;
+  tailoringLens?: string;
   data: TailoredResumeResponse;
 }
 
 const STEPPER_STAGES = [
-  "Parsing candidate resume content & structure...",
-  "Analyzing target Job Description & key competencies...",
-  "Aligning experience bullets with Google XYZ formula...",
-  "Synthesizing ATS keyword density & scoring fit...",
+  "Reviewing resume structure & experience...",
+  "Analyzing job requirements & key competencies...",
+  "Refining achievements & quantifiable outcomes...",
+  "Checking keyword alignment & ATS readiness...",
 ];
 
 function subscribeToStorage(callback: () => void) {
@@ -84,6 +84,7 @@ export default function HomePage() {
     location: "",
     linkedin: "",
     github: "",
+    portfolio: "",
   });
 
   const [options, setOptions] = useState<CustomizationOptions>({
@@ -101,36 +102,44 @@ export default function HomePage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [stepperIndex, setStepperIndex] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"resume" | "diff" | "ats" | "cover_letter" | "markdown">("resume");
   const [backendStatus, setBackendStatus] = useState<{ online: boolean; llm_engine?: string }>({
     online: false,
   });
 
-  const [isHfModalOpen, setIsHfModalOpen] = useState(false);
-  const storedHfToken = useStoredValue("preplab_hf_token", "");
-  const storedHfModel = useStoredValue("preplab_hf_model", "meta-llama/Llama-3.3-70B-Instruct");
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
-  const [customHfToken, setCustomHfToken] = useState<string | null>(null);
-  const [customHfModel, setCustomHfModel] = useState<string | null>(null);
-
-  const hfToken = customHfToken !== null ? customHfToken : storedHfToken;
-  const hfModel = customHfModel !== null ? customHfModel : storedHfModel;
-
-  const handleUpdateHfToken = (token: string) => {
-    setCustomHfToken(token);
+  useEffect(() => {
     try {
-      localStorage.setItem("preplab_hf_token", token);
-      window.dispatchEvent(new Event("storage"));
+      const savedTheme = (localStorage.getItem("cleanlab_theme") || localStorage.getItem("preplab_theme")) as "dark" | "light" | null;
+      if (savedTheme === "light" || savedTheme === "dark") {
+        setTheme(savedTheme);
+        if (savedTheme === "light") {
+          document.documentElement.classList.remove("dark");
+          document.documentElement.classList.add("light");
+        } else {
+          document.documentElement.classList.remove("light");
+          document.documentElement.classList.add("dark");
+        }
+      }
     } catch {
       // ignore
     }
-  };
+  }, []);
 
-  const handleUpdateHfModel = (model: string) => {
-    setCustomHfModel(model);
+  const handleToggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
     try {
-      localStorage.setItem("preplab_hf_model", model);
-      window.dispatchEvent(new Event("storage"));
+      localStorage.setItem("cleanlab_theme", next);
+      if (next === "light") {
+        document.documentElement.classList.remove("dark");
+        document.documentElement.classList.add("light");
+      } else {
+        document.documentElement.classList.remove("light");
+        document.documentElement.classList.add("dark");
+      }
     } catch {
       // ignore
     }
@@ -158,53 +167,58 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Handle Load Demo Case
-  const handleLoadDemo = async () => {
-    try {
-      setIsProcessing(true);
-      setErrorMessage(null);
-      const demo = await fetchSampleData();
-      setJobDescription(demo.job_description);
-      setResumeText(demo.resume_text);
-      setPdfFilename("Bhaskar_Sharma_Resume.pdf");
-      setPdfBase64(null);
-      setCandidateInfo({
-        name: "Bhaskar Sharma",
-        email: "bhaskar.sharma@example.com",
-        phone: "+91 98765 43210",
-        location: "New Delhi, India",
-        linkedin: "linkedin.com/in/bhaskar-dev",
-        github: "github.com/bhaskar-sharma",
-      });
-      setParsedMetadata({
-        filename: "Bhaskar_Sharma_Resume.pdf",
-        file_size_bytes: 42300,
-        file_size_formatted: "41.3 KB",
-        file_type: "PDF",
-        character_count: demo.resume_text.length,
-        word_count: demo.resume_text.split(/\s+/).filter(Boolean).length,
-        extracted_text: demo.resume_text,
-        detected_name: "Bhaskar Sharma",
-        detected_email: "bhaskar.sharma@example.com",
-        detected_phone: "+91 98765 43210",
-        detected_location: "New Delhi, India",
-        detected_linkedin: "linkedin.com/in/bhaskar-dev",
-        detected_github: "github.com/bhaskar-sharma",
-        page_count: 2,
-        has_tables: true,
-        sections_detected: ["Summary", "Skills", "Experience", "Projects", "Education"],
-      });
-      setOptions((prev) => ({
-        ...prev,
-        target_role: demo.role_title,
-        target_company: demo.company,
-      }));
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Could not load sample data";
-      setErrorMessage(msg);
-    } finally {
-      setIsProcessing(false);
+  // Neutralize 3rd-party extension overlays (e.g. Careerflow) and Next.js dev overlays
+  useEffect(() => {
+    const cleanInjectedElements = () => {
+      try {
+        const extensionSelectors = [
+          "#careerflow-extension-root",
+          "#careerflow-root",
+          "careerflow-container",
+          "careerflow-widget",
+          "careerflow-sidebar",
+          "[data-careerflow]",
+          ".cf-extension-container",
+          "nextjs-portal",
+          "[data-nextjs-dev-tools-button]",
+        ];
+        document.querySelectorAll(extensionSelectors.join(",")).forEach((el) => {
+          el.remove();
+        });
+
+        const candidates = document.querySelectorAll("body > div, body > aside, body > section, body > iframe");
+        candidates.forEach((el) => {
+          const text = (el.textContent || "").toLowerCase();
+          if (
+            text.includes("careerflow") ||
+            text.includes("signintoviewdetails") ||
+            text.includes("sign in on careerflow")
+          ) {
+            el.remove();
+          }
+        });
+      } catch {
+        // ignore
+      }
+    };
+
+    cleanInjectedElements();
+    const observer = new MutationObserver(() => {
+      cleanInjectedElements();
+    });
+
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true });
     }
+    return () => observer.disconnect();
+  }, []);
+
+  const handleDetectRoleAndCompany = (role: string, company: string) => {
+    setOptions((prev) => ({
+      ...prev,
+      ...(role ? { target_role: role } : {}),
+      ...(company ? { target_company: company } : {}),
+    }));
   };
 
   const handleReset = () => {
@@ -225,11 +239,13 @@ export default function HomePage() {
     setVersions([]);
     setActiveVersionId(null);
     setErrorMessage(null);
+    setWarningMessage(null);
     setActiveTab("resume");
   };
 
   const handleTailorSubmit = async () => {
     setErrorMessage(null);
+    setWarningMessage(null);
 
     if (!resumeText || resumeText.trim().length < 30) {
       setErrorMessage("Please upload your resume or paste the text content first (minimum 30 characters).");
@@ -253,31 +269,40 @@ export default function HomePage() {
         candidate_location: candidateInfo.location || parsedMetadata?.detected_location,
         candidate_linkedin: candidateInfo.linkedin || parsedMetadata?.detected_linkedin,
         candidate_github: candidateInfo.github || parsedMetadata?.detected_github,
+        candidate_portfolio: candidateInfo.portfolio || parsedMetadata?.detected_portfolio,
         pdf_base64: pdfBase64 || undefined,
         pdf_filename: pdfFilename || parsedMetadata?.filename || undefined,
         options: {
           ...options,
-          hf_token: hfToken || undefined,
-          hf_model: hfModel || undefined,
+          candidate_portfolio: candidateInfo.portfolio || parsedMetadata?.detected_portfolio,
+          iteration_seed: versions.length + 1,
         },
       });
 
+      if (res.api_warning) {
+        setWarningMessage(res.api_warning);
+      } else {
+        setWarningMessage(null);
+      }
+
       // Add to versions
       const newVersionId = versions.length + 1;
-      const toneLabel =
+      const lensTitle = res.tailoring_lens ? res.tailoring_lens.split("&")[0].trim() : (
         options.tone === "impact_metrics"
           ? "Impact & Metrics"
           : options.tone === "technical"
           ? "Technical"
           : options.tone === "executive"
           ? "Executive"
-          : "Standard ATS";
+          : "Standard ATS"
+      );
 
       const newVersion: ResumeVersion = {
         id: newVersionId,
-        label: `v${newVersionId} (${toneLabel})`,
+        label: `v${newVersionId}: ${lensTitle}`,
         tone: options.tone,
         matchScore: res.match_score_after,
+        tailoringLens: res.tailoring_lens,
         data: res,
       };
 
@@ -310,41 +335,27 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#090d16] text-slate-100">
+    <div className={`min-h-screen flex flex-col transition-colors duration-200 ${
+      theme === "dark" ? "bg-[#090d16] text-slate-100" : "bg-slate-50 text-slate-900"
+    }`}>
       {/* Top Navbar */}
       <Navbar
         backendStatus={backendStatus}
-        onLoadDemo={handleLoadDemo}
         onReset={handleReset}
         isCustomizing={isProcessing}
-        onOpenHfModal={() => setIsHfModalOpen(true)}
-        hasHfToken={Boolean(hfToken)}
-      />
-
-      {/* Hugging Face Settings Modal */}
-      <HuggingFaceModal
-        isOpen={isHfModalOpen}
-        onClose={() => setIsHfModalOpen(false)}
-        hfToken={hfToken}
-        setHfToken={handleUpdateHfToken}
-        hfModel={hfModel}
-        setHfModel={handleUpdateHfModel}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
       />
 
       {/* Main Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Hero Tagline */}
-        <div className="mb-8 text-center max-w-3xl mx-auto no-print">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs font-semibold text-indigo-400 mb-3">
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>AI-Powered Resume Optimization Engine</span>
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-            Tailor Your Resume to Any <span className="text-gradient">Job Description</span>
+        <div className="mb-8 text-center max-w-2xl mx-auto no-print">
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+            Tailor Your Resume for Any Role
           </h1>
-          <p className="mt-2 text-sm text-slate-400 max-w-2xl mx-auto">
-            Extract keywords from the JD, re-frame experience bullets using the Google XYZ impact formula,
-            maximize ATS match score, and download ready-to-send PDF and DOCX formats.
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+            Align your real accomplishments with target job requirements, optimize for ATS screening, and highlight matching skills.
           </p>
         </div>
 
@@ -358,6 +369,25 @@ export default function HomePage() {
             <button
               onClick={() => setErrorMessage(null)}
               className="text-xs text-rose-400 hover:text-white px-2 py-1"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {/* Global Warning / Provider Alert Banner */}
+        {warningMessage && (
+          <div className="mb-6 flex items-start justify-between rounded-xl bg-amber-500/15 border border-amber-500/30 p-4 text-xs sm:text-sm text-amber-200 no-print">
+            <div className="flex items-start space-x-3">
+              <span className="text-xl leading-none">⚠️</span>
+              <div className="space-y-1">
+                <span className="font-semibold text-amber-300 text-sm">LLM Provider Status Notice</span>
+                <p className="whitespace-pre-line text-xs text-amber-100/90 leading-relaxed font-sans">{warningMessage}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setWarningMessage(null)}
+              className="text-xs text-amber-400 hover:text-white px-2 py-1 shrink-0 ml-3"
             >
               Dismiss
             </button>
@@ -387,6 +417,7 @@ export default function HomePage() {
             <JobDescriptionInput
               jobDescription={jobDescription}
               setJobDescription={setJobDescription}
+              onDetectRoleAndCompany={handleDetectRoleAndCompany}
               isProcessing={isProcessing}
             />
 
@@ -402,27 +433,27 @@ export default function HomePage() {
               type="button"
               onClick={handleTailorSubmit}
               disabled={isProcessing}
-              className="w-full relative group overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 p-4 text-sm font-bold text-white shadow-xl shadow-indigo-600/30 transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+              className="w-full relative group overflow-hidden rounded-2xl bg-indigo-600 hover:bg-indigo-700 p-3.5 text-sm font-semibold text-white shadow-md transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
             >
               <div className="flex flex-col items-center justify-center space-y-1">
                 <div className="flex items-center space-x-2">
                   {isProcessing ? (
                     <>
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      <span>Optimizing Resume with AI...</span>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Tailoring Resume...</span>
                     </>
                   ) : (
                     <>
-                      <Sparkles className="h-5 w-5 text-indigo-200 group-hover:rotate-12 transition-transform" />
-                      <span>Tailor Resume with AI</span>
-                      <ArrowRight className="h-4 w-4 ml-1 group-hover:translate-x-1 transition-transform" />
+                      <Sparkles className="h-4 w-4 text-indigo-200" />
+                      <span>Tailor for this Role</span>
+                      <ArrowRight className="h-4 w-4 ml-0.5 group-hover:translate-x-0.5 transition-transform" />
                     </>
                   )}
                 </div>
 
                 {/* Progressive Live Stepper Message */}
                 {isProcessing && (
-                  <span className="text-[11px] text-indigo-200 font-normal animate-pulse">
+                  <span className="text-[11px] text-indigo-200 font-normal">
                     {STEPPER_STAGES[stepperIndex]}
                   </span>
                 )}
@@ -434,72 +465,101 @@ export default function HomePage() {
           <div className="lg:col-span-7 space-y-6">
             {!tailoredResult ? (
               /* Empty State */
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-8 sm:p-12 text-center backdrop-blur-sm">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-400 mb-4 ring-1 ring-indigo-500/20">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-8 sm:p-12 text-center backdrop-blur-sm shadow-sm">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 mb-4 ring-1 ring-indigo-200 dark:ring-indigo-500/20">
                   <FileText className="h-8 w-8" />
                 </div>
-                <h3 className="text-lg font-bold text-white">Your Tailored Resume will appear here</h3>
-                <p className="mt-2 text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
-                  Upload your current PDF or DOCX resume, paste the target Job Description, and our AI will
-                  generate an ATS-optimized version with keyword metrics and a matching cover letter.
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Your tailored resume will appear here</h3>
+                <p className="mt-2 text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+                  Upload your resume, paste the target job description, and tailor your bullet points and skills for the role.
                 </p>
 
-                <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
-                  <button
-                    onClick={handleLoadDemo}
-                    disabled={isProcessing}
-                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-xs font-semibold text-white shadow-md transition"
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    <span>Try With Demo Case</span>
-                  </button>
-                </div>
+                {resumeText ? (
+                  <div className="mt-6 flex flex-col items-center justify-center gap-3">
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 text-xs font-semibold">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <span>Resume & JD Ready</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleTailorSubmit}
+                      disabled={isProcessing}
+                      className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-6 py-2.5 text-xs font-semibold text-white shadow-sm transition cursor-pointer disabled:opacity-50"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      <span>Tailor Resume for Role</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-6 flex items-center justify-center">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      Upload your resume in the panel on the left to get started
+                    </span>
+                  </div>
+                )}
 
                 {/* Steps Checklist */}
-                <div className="mt-8 border-t border-slate-800 pt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
-                  <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
-                    <span className="text-indigo-400 text-xs font-bold block mb-1">Step 1</span>
-                    <span className="text-xs text-slate-300">Parse PDF / Word document</span>
+                <div className="mt-8 border-t border-slate-200 dark:border-slate-800 pt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
+                    <span className="text-indigo-600 dark:text-indigo-400 text-xs font-bold block mb-1">Step 1</span>
+                    <span className="text-xs text-slate-700 dark:text-slate-300">Upload PDF or Word resume</span>
                   </div>
-                  <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
-                    <span className="text-indigo-400 text-xs font-bold block mb-1">Step 2</span>
-                    <span className="text-xs text-slate-300">Re-align with JD keywords</span>
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
+                    <span className="text-indigo-600 dark:text-indigo-400 text-xs font-bold block mb-1">Step 2</span>
+                    <span className="text-xs text-slate-700 dark:text-slate-300">Add target job description</span>
                   </div>
-                  <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
-                    <span className="text-indigo-400 text-xs font-bold block mb-1">Step 3</span>
-                    <span className="text-xs text-slate-300">Export clean ATS PDF & Word</span>
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
+                    <span className="text-indigo-600 dark:text-indigo-400 text-xs font-bold block mb-1">Step 3</span>
+                    <span className="text-xs text-slate-700 dark:text-slate-300">Review & export 1-page PDF</span>
                   </div>
                 </div>
               </div>
             ) : (
               /* Result State */
-              <div className="space-y-6">
-                {/* Bonus: Multiple Resume Versions Switcher Bar */}
-                {versions.length > 1 && (
-                  <div className="rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-3 flex flex-wrap items-center justify-between gap-2 no-print">
-                    <div className="flex items-center space-x-2 text-xs font-semibold text-indigo-300">
-                      <History className="h-4 w-4" />
-                      <span>Generated Versions:</span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5">
-                      {versions.map((v) => (
-                        <button
-                          key={v.id}
-                          type="button"
-                          onClick={() => handleSwitchVersion(v)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
-                            activeVersionId === v.id
-                              ? "bg-indigo-600 text-white shadow-sm ring-1 ring-indigo-400"
-                              : "bg-slate-800/80 text-slate-300 hover:bg-slate-700"
-                          }`}
-                        >
-                          {v.label} <span className="text-emerald-400 font-bold ml-1">{v.matchScore}%</span>
-                        </button>
-                      ))}
-                    </div>
+              <div className="space-y-4">
+                {/* Clean Variations Switcher */}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 flex flex-wrap items-center justify-between gap-2.5 no-print shadow-xs">
+                  <div className="flex items-center space-x-2 text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <History className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                    <span>Variations ({versions.length}):</span>
                   </div>
-                )}
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {versions.map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => handleSwitchVersion(v)}
+                        className={`px-3 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                          activeVersionId === v.id
+                            ? "bg-indigo-600 text-white shadow-xs"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
+                        }`}
+                      >
+                        {v.label} <span className="font-semibold ml-1 text-emerald-600 dark:text-emerald-400">{v.matchScore}%</span>
+                      </button>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={handleTailorSubmit}
+                      disabled={isProcessing}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition disabled:opacity-50 cursor-pointer"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <span>Tailoring...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
+                          <span>+ New Variation</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
 
                 {/* Metrics Bar */}
                 <div className="no-print">
@@ -509,44 +569,15 @@ export default function HomePage() {
                   />
                 </div>
 
-                {/* Model Engine Badge Notice */}
-                {tailoredResult.provider_used === "Hugging Face" ? (
-                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-3 text-xs text-emerald-300 flex items-center justify-between no-print">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🤗</span>
-                      <span>
-                        Tailored using <strong>Hugging Face LLM API</strong> ({tailoredResult.model_used}).
-                      </span>
-                    </div>
-                  </div>
-                ) : tailoredResult.is_demo_mode ? (
-                  <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-3 text-xs text-amber-300 flex items-center justify-between no-print">
-                    <div className="flex items-center gap-2">
-                      <Zap className="h-4 w-4 text-amber-400 shrink-0" />
-                      <span>
-                        Generated via <strong>Built-in Smart Engine</strong>. To connect live <strong>Hugging Face</strong>, click the{" "}
-                        <button
-                          type="button"
-                          onClick={() => setIsHfModalOpen(true)}
-                          className="font-bold underline text-amber-200 hover:text-white"
-                        >
-                          🤗 Hugging Face
-                        </button>{" "}
-                        button in the navbar to add your free access token.
-                      </span>
-                    </div>
-                  </div>
-                ) : null}
-
                 {/* Tab Navigation & Export Actions */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3 no-print">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3 no-print">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       onClick={() => setActiveTab("resume")}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                         activeTab === "resume"
                           ? "bg-indigo-600 text-white shadow-sm"
-                          : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                       }`}
                     >
                       <FileText className="h-3.5 w-3.5" />
@@ -555,26 +586,26 @@ export default function HomePage() {
 
                     <button
                       onClick={() => setActiveTab("diff")}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                         activeTab === "diff"
                           ? "bg-indigo-600 text-white shadow-sm"
-                          : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                       }`}
                     >
                       <GitCompare className="h-3.5 w-3.5" />
-                      <span>Diff View</span>
+                      <span>Key Improvements</span>
                     </button>
 
                     <button
                       onClick={() => setActiveTab("ats")}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                         activeTab === "ats"
                           ? "bg-indigo-600 text-white shadow-sm"
-                          : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                       }`}
                     >
                       <ShieldCheck className="h-3.5 w-3.5" />
-                      <span>ATS Diagnostics</span>
+                      <span>ATS Breakdown</span>
                     </button>
 
                     {tailoredResult.cover_letter && (
@@ -583,7 +614,7 @@ export default function HomePage() {
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                           activeTab === "cover_letter"
                             ? "bg-indigo-600 text-white shadow-sm"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                            : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                         }`}
                       >
                         <Mail className="h-3.5 w-3.5" />
@@ -596,7 +627,7 @@ export default function HomePage() {
                       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                         activeTab === "markdown"
                           ? "bg-indigo-600 text-white shadow-sm"
-                          : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                       }`}
                     >
                       <Code className="h-3.5 w-3.5" />
@@ -629,7 +660,7 @@ export default function HomePage() {
                   )}
 
                   {activeTab === "markdown" && (
-                    <div className="rounded-2xl border border-slate-800 bg-slate-950/90 p-4 font-mono text-xs text-slate-300 whitespace-pre-wrap">
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/90 p-4 font-mono text-xs text-slate-800 dark:text-slate-300 whitespace-pre-wrap">
                       {tailoredResult.raw_markdown}
                     </div>
                   )}
@@ -641,7 +672,7 @@ export default function HomePage() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-16 border-t border-slate-800/80 bg-[#090d16] py-6 text-center text-xs text-slate-500 no-print">
+      <footer className="mt-16 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-[#090d16] py-6 text-center text-xs text-slate-500 transition-colors duration-200 no-print">
         <p>
           Full-Stack Developer Assignment Project • Built with Next.js (App Router), Python (FastAPI), and AI/LLM integration.
         </p>

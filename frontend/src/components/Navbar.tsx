@@ -1,103 +1,81 @@
 "use client";
 
 import React from "react";
-import { Sparkles, RefreshCw } from "lucide-react";
+import { Sparkles, RefreshCw, Sun, Moon } from "lucide-react";
 
 interface NavbarProps {
   backendStatus: { online: boolean; llm_engine?: string };
-  onLoadDemo: () => void;
   onReset: () => void;
   isCustomizing: boolean;
-  onOpenHfModal: () => void;
-  hasHfToken: boolean;
+  theme?: "dark" | "light";
+  onToggleTheme?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   backendStatus,
-  onLoadDemo,
   onReset,
   isCustomizing,
-  onOpenHfModal,
-  hasHfToken,
+  theme = "dark",
+  onToggleTheme,
 }) => {
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-slate-800 bg-[#090d16]/80 backdrop-blur-md">
+    <header className="sticky top-0 z-50 w-full border-b border-slate-200 dark:border-slate-800 bg-white/85 dark:bg-[#090d16]/85 backdrop-blur-md transition-colors duration-200">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Brand / Logo */}
         <div className="flex items-center space-x-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 shadow-lg shadow-indigo-500/25">
-            <Sparkles className="h-5 w-5 text-white" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm">
+            <Sparkles className="h-4 w-4" />
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <span className="font-bold text-lg tracking-tight text-white">
-                PrepLab <span className="text-indigo-400">ResumeAI</span>
-              </span>
-              <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-400 border border-indigo-500/20">
-                PRO
+              <span className="font-bold text-base tracking-tight text-slate-900 dark:text-white">
+                CleanLab <span className="text-indigo-600 dark:text-indigo-400 font-medium">Resume</span>
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 hidden sm:block">
-              Intelligent Resume Customizer & ATS Match Engine
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block">
+              Role-focused resume tailoring & ATS optimization
             </p>
           </div>
         </div>
 
-        {/* Backend & Model Status Indicator */}
-        <div className="flex items-center space-x-3">
-          <div className="hidden md:flex items-center space-x-2 rounded-full bg-slate-900/80 px-3 py-1.5 border border-slate-800 text-xs">
+        {/* Status & Action Controls */}
+        <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="hidden md:flex items-center space-x-2 rounded-full bg-slate-100 dark:bg-slate-900/80 px-2.5 py-1 border border-slate-200 dark:border-slate-800 text-xs">
             {backendStatus.online ? (
               <>
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span className="text-slate-300">
-                  Engine: <span className="text-emerald-400 font-medium">{backendStatus.llm_engine || "Gemini AI"}</span>
+                <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+                <span className="text-slate-600 dark:text-slate-400 text-[11px]">
+                  {backendStatus.llm_engine ? `${backendStatus.llm_engine} ready` : "Ready"}
                 </span>
               </>
             ) : (
               <>
                 <span className="h-2 w-2 rounded-full bg-amber-500"></span>
-                <span className="text-amber-300">Connecting Backend...</span>
+                <span className="text-amber-600 dark:text-amber-300 text-[11px]">Connecting...</span>
               </>
             )}
           </div>
 
-          {/* Hugging Face Settings Button */}
-          <button
-            onClick={onOpenHfModal}
-            suppressHydrationWarning
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border transition ${
-              hasHfToken
-                ? "bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25"
-                : "bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"
-            }`}
-            title="Configure Hugging Face API key and model"
-          >
-            <span>🤗</span>
-            <span className="hidden sm:inline">Hugging Face</span>
-            {hasHfToken && (
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" suppressHydrationWarning></span>
-            )}
-          </button>
-
-          {/* Quick Demo Button */}
-          <button
-            onClick={onLoadDemo}
-            disabled={isCustomizing}
-            className="group relative inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-500/20 to-purple-500/20 px-3.5 py-1.5 text-xs font-semibold text-indigo-300 border border-indigo-500/30 transition hover:border-indigo-400 hover:text-white hover:shadow-sm disabled:opacity-50"
-            title="Load the ThePrepLab Full-Stack Developer JD and candidate resume"
-          >
-            <Sparkles className="h-3.5 w-3.5 text-indigo-400 group-hover:rotate-12 transition-transform" />
-            <span>Load Demo Case</span>
-          </button>
+          {/* Theme Toggle Button */}
+          {onToggleTheme && (
+            <button
+              onClick={onToggleTheme}
+              className="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 dark:bg-slate-800/80 dark:border-slate-700 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-700 transition"
+              title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
+            >
+              {theme === "dark" ? (
+                <Sun className="h-4 w-4 text-amber-400" />
+              ) : (
+                <Moon className="h-4 w-4 text-indigo-600" />
+              )}
+            </button>
+          )}
 
           {/* Reset Button */}
           <button
             onClick={onReset}
             disabled={isCustomizing}
-            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-lg px-2 sm:px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition disabled:opacity-50"
             title="Clear all fields"
           >
             <RefreshCw className="h-3.5 w-3.5" />

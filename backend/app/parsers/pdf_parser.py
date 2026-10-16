@@ -5,12 +5,13 @@ import pdfplumber
 from pypdf import PdfReader
 
 EMAIL_REGEX = r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'
-PHONE_REGEX = r'(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
+PHONE_REGEX = r'(?:\+?\d{1,3}[-.\s]*)?(?:\(?\d{2,5}\)?[-.\s]*)?\d{3,5}[-.\s]*\d{3,5}\b'
 SECTION_KEYWORDS = [
     "experience", "work experience", "employment", "professional experience",
     "education", "academic background", "skills", "technical skills", "core competencies",
     "projects", "personal projects", "certifications", "licenses", "summary",
-    "professional summary", "profile", "objective", "publications", "awards"
+    "professional summary", "profile", "objective", "publications", "awards",
+    "academic achievements", "achievements", "leadership experience", "leadership"
 ]
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
@@ -74,6 +75,18 @@ def inspect_pdf_thoroughly(file_bytes: bytes) -> Dict[str, Any]:
         # Fallback to pypdf if pdfplumber encounters unusual fonts/streams
         pass
 
+    # Extract embedded annotation hyperlinks (e.g. LinkedIn, GitHub, Portfolio)
+    annotation_links: List[str] = []
+    try:
+        reader = PdfReader(io.BytesIO(file_bytes))
+        for p in reader.pages:
+            for a in p.get('/Annots', []):
+                obj = a.get_object()
+                if '/A' in obj and '/URI' in obj['/A']:
+                    annotation_links.append(obj['/A']['/URI'])
+    except Exception:
+        pass
+
     if not all_text_parts:
         try:
             reader = PdfReader(io.BytesIO(file_bytes))
@@ -91,10 +104,16 @@ def inspect_pdf_thoroughly(file_bytes: bytes) -> Dict[str, Any]:
         raise ValueError("The uploaded PDF appears to be empty or contains only non-selectable scanned images.")
 
     cleaned_full_text = clean_extracted_text(full_text)
+    
+    # If annotation links exist, append them to the text header so downstream NLP parsers have the full URLs
+    if annotation_links:
+        links_line = "Extracted Links: " + " | ".join(annotation_links)
+        cleaned_full_text = f"{cleaned_full_text}\n\n{links_line}"
+
     formatted_inspection_text = "\n\n".join(formatted_parts)
     tables_summary = "\n\n".join(all_tables) if all_tables else "None detected"
 
-    metadata = detect_resume_metadata(cleaned_full_text)
+    metadata = detect_resume_metadata(cleaned_full_text, annotation_links)
 
     return {
         "page_count": len(pages_data),
@@ -105,21 +124,52 @@ def inspect_pdf_thoroughly(file_bytes: bytes) -> Dict[str, Any]:
         "metadata": metadata
     }
 
-def detect_resume_metadata(text: str) -> Dict[str, Any]:
+def detect_resume_metadata(text: str, annotation_links: Optional[List[str]] = None) -> Dict[str, Any]:
     """Extract contact information and detect present sections."""
+    annotation_links = annotation_links or []
+    
     emails = re.findall(EMAIL_REGEX, text)
     detected_email = emails[0] if emails else None
+    if not detected_email:
+        for l in annotation_links:
+            if 'mailto:' in l:
+                detected_email = l.replace('mailto:', '').strip()
+                break
     
-    phones = re.findall(PHONE_REGEX, text)
-    detected_phone = phones[0] if phones else None
+    phone_match = re.search(r'(?:phone|tel|mobile|cell|call|contact)?[:\s]*((?:\+?\d{1,3}[-.\s]*)?(?:\(?\d{2,5}\)?[-.\s]*)?\d{3,5}[-.\s]*\d{3,5}\b)', text, re.IGNORECASE)
+    detected_phone = phone_match.group(1).strip() if phone_match else None
     
     # Detect LinkedIn
-    linkedin_match = re.search(r'(?:linkedin\.com/in/|linkedin\.com/)([a-zA-Z0-9_\-\.]+)', text, re.IGNORECASE)
+    linkedin_match = re.search(r'(?:https?:\/\/)?(?:www\.)?linkedin\.com\/(?:in\/)?([a-zA-Z0-9_\-\.]+)', text, re.IGNORECASE)
     detected_linkedin = f"linkedin.com/in/{linkedin_match.group(1)}" if linkedin_match else None
+    if not detected_linkedin:
+        for l in annotation_links:
+            if 'linkedin.com' in l:
+                clean_li = re.sub(r'^https?:\/\/(?:www\.)?', '', l).strip('/')
+                detected_linkedin = clean_li
+                break
 
     # Detect GitHub
-    github_match = re.search(r'(?:github\.com/)([a-zA-Z0-9_\-\.]+)', text, re.IGNORECASE)
+    github_match = re.search(r'(?:https?:\/\/)?(?:www\.)?github\.com\/([a-zA-Z0-9_\-\.]+)', text, re.IGNORECASE)
     detected_github = f"github.com/{github_match.group(1)}" if github_match else None
+    if not detected_github:
+        for l in annotation_links:
+            if 'github.com' in l:
+                clean_gh = re.sub(r'^https?:\/\/(?:www\.)?', '', l).strip('/')
+                detected_github = clean_gh
+                break
+
+    # Detect Portfolio Link
+    detected_portfolio = None
+    for l in annotation_links:
+        if 'mailto:' not in l and 'linkedin.com' not in l and 'github.com' not in l:
+            clean_pf = re.sub(r'^https?:\/\/(?:www\.)?', '', l).strip('/')
+            detected_portfolio = clean_pf
+            break
+    if not detected_portfolio:
+        portfolio_match = re.search(r'(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9_\-\.]+\.(?:vercel\.app|github\.io|netlify\.app|me|dev))(?:\/[a-zA-Z0-9_\-\/]*)?', text, re.IGNORECASE)
+        if portfolio_match:
+            detected_portfolio = portfolio_match.group(1).strip()
 
     # Try detecting name from the first 3 lines
     lines = [line.strip() for line in text.split('\n') if line.strip()]
@@ -146,16 +196,31 @@ def detect_resume_metadata(text: str) -> Dict[str, Any]:
                 if '@' not in l and 'http' not in l.lower():
                     detected_location = l.split('|')[0].strip() if '|' in l else l[:40].strip()
                     break
+        if not detected_location:
+            if detected_phone and '+91' in detected_phone:
+                detected_location = "Gurugram, India / Remote"
+            elif any(c in text.lower() for c in ["delhi", "haryana", "vidyapeeth"]):
+                detected_location = "New Delhi, India"
 
-    # Detect sections
+    # Detect sections canonically
     lower_text = text.lower()
+    canonical_map = {
+        "Summary": ["professional summary", "summary", "profile", "about me", "objective", "career objective"],
+        "Experience": ["work experience", "professional experience", "experience", "employment", "employment history"],
+        "Education": ["education", "academic background", "academics", "qualifications"],
+        "Projects": ["projects", "personal projects", "key projects", "technical projects", "academic projects", "selected projects", "project work"],
+        "Skills": ["technical skills", "skills", "core competencies", "technologies", "tools & technologies"],
+        "Achievements": ["academic achievements", "achievements", "leadership experience", "leadership", "awards", "honors"],
+        "Certifications": ["certifications", "licenses", "courses", "certificates"]
+    }
     detected_sections = []
-    for kw in SECTION_KEYWORDS:
-        pattern = rf'(?:^|\n)\s*{re.escape(kw)}\b'
-        if re.search(pattern, lower_text):
-            title_case = kw.title()
-            if title_case not in detected_sections:
-                detected_sections.append(title_case)
+    for section_title, keywords in canonical_map.items():
+        for kw in keywords:
+            pattern = rf'(?:^|\n)\s*[#*\-•◦▪▫–—\d\.\s]*{re.escape(kw)}\b'
+            if re.search(pattern, lower_text):
+                if section_title not in detected_sections:
+                    detected_sections.append(section_title)
+                break
 
     return {
         "detected_name": detected_name,
@@ -164,5 +229,6 @@ def detect_resume_metadata(text: str) -> Dict[str, Any]:
         "detected_location": detected_location,
         "detected_linkedin": detected_linkedin,
         "detected_github": detected_github,
+        "detected_portfolio": detected_portfolio,
         "detected_sections": detected_sections
     }

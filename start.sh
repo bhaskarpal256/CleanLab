@@ -42,7 +42,7 @@ FRONTEND_PID=$!
 
 echo ""
 echo "=========================================================="
-echo "✨ PrepLab AI Resume Customizer is LIVE!"
+echo "✨ CleanLab Resume AI Customizer is LIVE!"
 echo "   🌐 Frontend UI:     http://localhost:3000"
 echo "   🔌 Backend API:     http://localhost:8000"
 echo "   📖 API Docs:        http://localhost:8000/docs"

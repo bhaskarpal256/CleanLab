@@ -5,7 +5,9 @@ from ..config import settings
 from ..schemas import ParseResumeResponse, TailorResumeRequest, TailoredResumeResponse
 from ..parsers.pdf_parser import extract_text_from_pdf, detect_resume_metadata, inspect_pdf_thoroughly
 from ..parsers.docx_parser import extract_text_from_docx
+from ..parsers.resume_extractor import split_resume_into_sections, parse_achievements_section, parse_projects_section
 from ..services.llm_service import tailor_resume
+from ..services.scorer import evaluate_ats
 
 router = APIRouter(prefix="/api", tags=["resume"])
 
@@ -133,6 +135,33 @@ async def parse_resume_file(file: UploadFile = File(...)):
         )
 
     words = extracted_text.split()
+    sections = split_resume_into_sections(extracted_text)
+    detected_achievements = parse_achievements_section(sections.get("achievements", ""))
+    
+    # Extract projects from projects section or full resume text
+    raw_projects = parse_projects_section(sections.get("projects", "")) or parse_projects_section(extracted_text)
+    detected_projects = [p.get("title", "") for p in raw_projects if p.get("title")]
+
+    # Build canonical detected sections list
+    canonical_sections = []
+    for sec_name, display_name in [
+        ("summary", "Summary"),
+        ("skills", "Skills"),
+        ("experience", "Experience"),
+        ("projects", "Projects"),
+        ("education", "Education"),
+        ("achievements", "Achievements"),
+        ("certifications", "Certifications")
+    ]:
+        if sections.get(sec_name) or (sec_name == "projects" and detected_projects):
+            canonical_sections.append(display_name)
+
+    if not canonical_sections:
+        canonical_sections = metadata.get("detected_sections", [])
+    elif "Projects" not in canonical_sections and detected_projects:
+        canonical_sections.append("Projects")
+
+    initial_ats_eval = evaluate_ats(extracted_text, jd_text="", matched_count=0, missing_count=0)
 
     return ParseResumeResponse(
         filename=filename,
@@ -148,9 +177,14 @@ async def parse_resume_file(file: UploadFile = File(...)):
         detected_location=metadata.get("detected_location"),
         detected_linkedin=metadata.get("detected_linkedin"),
         detected_github=metadata.get("detected_github"),
+        detected_portfolio=metadata.get("detected_portfolio"),
+        detected_achievements=detected_achievements,
+        detected_projects=detected_projects,
         page_count=page_count,
         has_tables=has_tables,
-        sections_detected=metadata.get("detected_sections", [])
+        sections_detected=canonical_sections,
+        initial_ats_score=initial_ats_eval.overall_score,
+        ats_evaluation=initial_ats_eval
     )
 
 @router.post("/tailor-resume", response_model=TailoredResumeResponse)
@@ -178,6 +212,7 @@ async def tailor_resume_endpoint(request: TailorResumeRequest):
             candidate_location=request.candidate_location,
             candidate_linkedin=request.candidate_linkedin,
             candidate_github=request.candidate_github,
+            candidate_portfolio=request.candidate_portfolio,
             pdf_base64=request.pdf_base64,
             pdf_filename=request.pdf_filename,
             options=request.options

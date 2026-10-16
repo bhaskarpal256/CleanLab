@@ -97,8 +97,12 @@ def evaluate_ats(resume_text: str, jd_text: str, matched_count: int, missing_cou
         ))
         advice.append("Ensure your full email address and phone number are visible at top of page.")
 
-    # 2. Quantifiable Metrics (e.g. 20%, $50K, 3x, 500k)
-    metrics = re.findall(r'(\b\d+%\b|\$\d+[\d,]*[kmbKMB]?|\b\d+x\b|\b\d+\+\b|\b\d+\s*(?:users|clients|projects|ms|seconds|revenue)\b)', resume_text, re.IGNORECASE)
+    # 2. Quantifiable Metrics (e.g. 20%, $50K, 3x, 500k, 10,000+, 200ms)
+    metrics = re.findall(
+        r'(\b\d+(?:[\.,]\d+)?%|\$\d+[\d,]*(?:[kmbKMB])?|\b\d+x\b|\b\d+[\d,]*\+|\b\d+\s*(?:users|sessions|clients|projects|attendees|volunteers|bugs|ms|sec|seconds|minutes|hours|revenue)\b)',
+        resume_text,
+        re.IGNORECASE
+    )
     metrics_score = min(100, int((len(metrics) / 6.0) * 100))
     if len(metrics) >= 4:
         checklist.append(ATSChecklistItem(
@@ -156,29 +160,58 @@ def evaluate_ats(resume_text: str, jd_text: str, matched_count: int, missing_cou
         ))
         advice.append("Keep standard section titles so ATS parsers index your data accurately.")
 
-    # 5. Keyword Density
-    if matched_count >= 10:
-        checklist.append(ATSChecklistItem(
-            category="JD Keyword Density",
-            status="pass",
-            message=f"Strong keyword alignment: {matched_count} matching technical and domain keywords."
-        ))
-    elif matched_count >= 5:
-        checklist.append(ATSChecklistItem(
-            category="JD Keyword Density",
-            status="warning",
-            message=f"Moderate keyword match ({matched_count} keywords matched). Consider adding missing items."
-        ))
+    # 5. Keyword & Technical Competency Density
+    if not jd_text:
+        # Standalone resume check upon upload (before target JD is matched)
+        tokens = extract_meaningful_tokens(resume_text)
+        detected_tech = sorted(list(tokens.intersection(TECH_KEYWORDS)))
+        if len(detected_tech) >= 8:
+            checklist.append(ATSChecklistItem(
+                category="Technical Competency Density",
+                status="pass",
+                message=f"Found {len(detected_tech)} recognized technical competencies ({', '.join(detected_tech[:4])}, etc.)."
+            ))
+            matched_score_weight = 90
+        elif len(detected_tech) >= 4:
+            checklist.append(ATSChecklistItem(
+                category="Technical Competency Density",
+                status="warning",
+                message=f"Found {len(detected_tech)} technical competencies. Aligning with target JD will maximize interview calls."
+            ))
+            matched_score_weight = 65
+            advice.append("Include more specific technical frameworks and tools mentioned in target job descriptions.")
+        else:
+            checklist.append(ATSChecklistItem(
+                category="Technical Competency Density",
+                status="fail",
+                message="Limited technical keywords detected. Tailoring against a target JD is strongly recommended."
+            ))
+            matched_score_weight = 40
+            advice.append("Add your primary programming languages, frameworks, and cloud tools.")
     else:
-        checklist.append(ATSChecklistItem(
-            category="JD Keyword Density",
-            status="fail",
-            message=f"Low keyword overlap ({matched_count} keywords). Tailoring is highly recommended."
-        ))
+        if matched_count >= 10:
+            checklist.append(ATSChecklistItem(
+                category="JD Keyword Density",
+                status="pass",
+                message=f"Strong keyword alignment: {matched_count} matching technical and domain keywords."
+            ))
+        elif matched_count >= 5:
+            checklist.append(ATSChecklistItem(
+                category="JD Keyword Density",
+                status="warning",
+                message=f"Moderate keyword match ({matched_count} keywords matched). Consider adding missing items."
+            ))
+        else:
+            checklist.append(ATSChecklistItem(
+                category="JD Keyword Density",
+                status="fail",
+                message=f"Low keyword overlap ({matched_count} keywords). Tailoring is highly recommended."
+            ))
+        matched_score_weight = min(100, matched_count * 8)
 
     # Overall calculation
-    overall = int((metrics_score * 0.25) + (verbs_score * 0.25) + (formatting_score * 0.25) + (min(100, matched_count * 8) * 0.25))
-    overall = max(40, min(98, overall))
+    overall = int((metrics_score * 0.25) + (verbs_score * 0.25) + (formatting_score * 0.25) + (matched_score_weight * 0.25))
+    overall = max(35, min(98, overall))
 
     return ATSEvaluation(
         overall_score=overall,
