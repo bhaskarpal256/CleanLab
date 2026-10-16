@@ -1,6 +1,7 @@
+from __future__ import annotations
 import re
 import io
-from typing import Tuple, Dict, Any, List
+from typing import Tuple, Dict, Any, List, Optional
 import pdfplumber
 from pypdf import PdfReader
 
